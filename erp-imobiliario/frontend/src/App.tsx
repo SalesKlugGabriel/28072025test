@@ -20,8 +20,8 @@ import Arquitetura from './pages/Arquitetura';
 import PosVenda from './pages/PosVenda';
 import Configuracoes from './pages/Configuracoes';
 
-// Types
-interface User {
+// Types - Renomeado para evitar conflitos
+interface AppUser {
   id: string;
   name: string;
   email: string;
@@ -31,10 +31,10 @@ interface User {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
-  const handleLogin = (userData: User) => {
+  const handleLogin = (userData: AppUser) => {
     setUser(userData);
     setIsAuthenticated(true);
   };
