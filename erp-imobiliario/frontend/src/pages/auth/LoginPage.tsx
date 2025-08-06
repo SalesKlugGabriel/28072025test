@@ -10,7 +10,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'corretor' | 'gerente';
+  role: 'admin' | 'corretor' | 'gerente' | 'engenheiro' | 'arquiteto' | 'juridico' | 'financeiro'; // ← Adicionadas as 4 roles faltantes
   avatar?: string;
 }
 

@@ -1,0 +1,9 @@
+🔍 DIAGNÓSTICO LEGASYS - ESTRUTURA COMPLETA
+=============================================
+
+ESTRUTURA DE PASTAS:
+
+📁 ÁRVORE DE DIRETÓRIOS:
+src/
+
+📄 TODOS OS ARQUIVOS:

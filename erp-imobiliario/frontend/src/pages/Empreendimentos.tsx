@@ -1,1672 +1,1625 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import React, { useState } from 'react';
 import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  BuildingOffice2Icon,
-  HomeIcon,
-  KeyIcon,
-  MapPinIcon,
-  DocumentArrowUpIcon,
-  EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  Square3Stack3DIcon
-} from '@heroicons/react/24/outline';
+  Plus, Search, Filter, Building, MapPin, Calendar, Users,
+  TrendingUp, Home, Edit2, Eye, Trash2, ArrowLeft, X, Clock,
+  Info, Map, FileText, Image, Upload, Download, Shield,
+  Wrench, Scale, File, FileImage
+} from 'lucide-react';
 
-// ============================
-// TYPES & INTERFACES
-// ============================
-
-export interface Incorporadora {
-  id: string;
-  nome: string;
-  cnpj: string;
+// Interfaces
+interface Localizacao {
+  endereco: string;
+  cidade: string;
+  estado: string;
+  cep: string;
+  bairro: string;
 }
 
-export interface Construtora {
-  id: string;
-  nome: string;
-  cnpj: string;
+interface Responsaveis {
+  tecnico: string;
+  comercial: string;
+  juridico: string;
 }
 
-export interface TipoUnidade {
-  id: string;
+interface TipoUnidade {
   nome: string;
   tipologia: string;
-  areaPrivativa: number;
-  areaTotalReal: number;
-  vagas: number;
+  areaPrivativa: string;
+  vagasGaragem: number;
   quantidade: number;
-  valor: number;
+  preco: string;
 }
 
-export interface Bloco {
+interface Bloco {
   id: string;
   nome: string;
   totalAndares: number;
   unidadesPorAndar: number;
-  tipos: TipoUnidade[];
+  tipos: any[];
 }
 
-export interface Documento {
+interface Empreendimento {
   id: string;
   nome: string;
-  tipo: 'alvara' | 'habite_se' | 'memorial' | 'planta' | 'contrato' | 'outro';
-  arquivo: string;
-  dataUpload: string;
-}
-
-export interface Foto {
-  id: string;
-  nome: string;
-  categoria: 'fachada' | 'planta_baixa' | 'area_comum' | 'lazer' | 'decorado' | 'obra' | 'outro';
-  arquivo: string;
-  descricao?: string;
-}
-
-export interface UnidadeStatus {
-  bloco: string;
-  andar: number;
-  numero: string;
   tipo: string;
-  status: 'disponivel' | 'reservado' | 'vendido' | 'indisponivel';
-  cliente?: string;
-  dataVenda?: string;
-  dataReserva?: string;
-  observacoes?: string;
-}
-
-export interface Empreendimento {
-  id: string;
-  nome: string;
+  status: string;
+  imagem: string;
+  localizacao: Localizacao;
+  unidadesTotal: number;
+  unidadesVendidas: number;
+  unidadesReservadas: number;
+  valorTotal: string;
+  valorMedio: number;
+  dataInicio: string;
+  dataPrevista: string;
   descricao: string;
-  tipo: 'vertical' | 'horizontal';
-  status: 'lancamento' | 'em_obras' | 'pronto';
-  localizacao: {
-    estado: string;
-    cidade: string;
-    bairro: string;
-    endereco: string;
-    cep: string;
-  };
-  incorporadora: Incorporadora;
-  construtora: Construtora;
+  responsaveis: Responsaveis;
+  tiposUnidade: TipoUnidade[];
+  blocos: Bloco[];
   datas: {
     inicio: string;
     previsaoTermino: string;
-    dataEntrega?: string;
   };
-  blocos: Bloco[];
-  documentos: Documento[];
-  fotos: Foto[];
-  unidades: UnidadeStatus[];
-  totalUnidades: number;
-  unidadesDisponiveis: number;
-  unidadesReservadas: number;
-  unidadesVendidas: number;
-  valorMedio: number;
-  dataInclusao: string;
-  dataAtualizacao: string;
 }
 
-export interface ImovelTerceiro {
-  id: string;
-  codigo: string;
-  tipo: 'apartamento' | 'casa' | 'terreno' | 'comercial' | 'galpao';
-  endereco: string;
-  area: number;
-  valor: number;
-  status: 'disponivel' | 'reservado' | 'vendido' | 'indisponivel';
-  proprietario: string;
-  corretor?: string;
-  comissao: {
-    tipo: 'percentual' | 'valor_fixo';
-    valor: number;
-  };
-  fotos: string[];
-  documentos: string[];
-  observacoes?: string;
-  dataInclusao: string;
+interface FormDataType {
+  nome: string;
+  tipo: string;
+  status: string;
+  localizacao: Localizacao;
+  responsaveis: Responsaveis;
+  descricao: string;
+  dataInicio: string;
+  dataPrevista: string;
+  valorTotal: string;
+  valorMedio: string;
+  blocos: Array<{
+    id: number;
+    nome: string;
+    totalAndares: number;
+    unidadesPorAndar: number;
+  }>;
+  tiposApartamento: Array<{
+    id: number;
+    nome: string;
+    tipologia: string;
+    areaPrivativa: string;
+    vagasGaragem: number;
+    planta: File | null;
+    preco: string;
+  }>;
 }
 
-export interface ImovelAluguel {
-  id: string;
-  codigo: string;
-  tipo: 'apartamento' | 'casa' | 'comercial' | 'galpao';
-  endereco: string;
-  area: number;
-  valores: {
-    aluguel: number;
-    iptu: number;
-    condominio: number;
-  };
-  status: 'disponivel' | 'locado' | 'reservado' | 'indisponibilizado';
-  administrador: 'proprio' | 'terceiro';
-  contratoAtivo?: {
-    inquilino: string;
-    dataInicio: string;
-    dataFim: string;
-    dataVencimento: string;
-  };
-  documentos: string[];
-  dataInclusao: string;
-}
-
-// ============================
-// HELPER FUNCTIONS
-// ============================
-
-export const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value);
-};
-
-export const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('pt-BR');
-};
-
-export const calcularValorTotal = (valores: { aluguel: number; iptu: number; condominio: number }): number => {
-  return valores.aluguel + valores.iptu + valores.condominio;
-};
-
-// ============================
-// CSS CLASSES CONSTANTS
-// ============================
-
-export const buttonPrimary = "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500";
-
-export const buttonOutline = "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500";
-
-export const card = "bg-white shadow rounded-lg";
-
-export const cardHover = "bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md";
-
-export const formInput = "block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
-
-// ============================
-// MOCK DATA
-// ============================
-const mockIncorporadoras: Incorporadora[] = [
-  { id: '1', nome: 'Construtora Premium Ltda', cnpj: '12.345.678/0001-90' },
-  { id: '2', nome: 'Incorporadora Delta S/A', cnpj: '98.765.432/0001-10' }
-];
-
-const mockConstrutoras: Construtora[] = [
-  { id: '1', nome: 'Construtora Premium Ltda', cnpj: '12.345.678/0001-90' },
-  { id: '2', nome: 'Engenharia Alfa Ltda', cnpj: '11.222.333/0001-44' }
-];
-
-const mockEmpreendimentos: Empreendimento[] = [
-  {
-    id: '1',
-    nome: 'Residencial Jardim das Flores',
-    descricao: 'Empreendimento residencial com excelente localização na Vila Madalena, oferecendo apartamentos de 1 a 3 dormitórios com acabamento premium e área de lazer completa.',
-    tipo: 'vertical',
-    status: 'em_obras',
-    localizacao: {
-      estado: 'SP',
-      cidade: 'São Paulo',
-      bairro: 'Vila Madalena',
-      endereco: 'Rua das Flores, 123',
-      cep: '05434-020'
-    },
-    incorporadora: mockIncorporadoras[0],
-    construtora: mockConstrutoras[0],
-    datas: {
-      inicio: '2024-01-15',
-      previsaoTermino: '2025-12-30'
-    },
-    blocos: [
-      {
-        id: 'bloco-a',
-        nome: 'Torre A',
-        totalAndares: 15,
-        unidadesPorAndar: 4,
-        tipos: [
-          {
-            id: 'tipo-1',
-            nome: '1 Dormitório',
-            tipologia: '1 quarto',
-            areaPrivativa: 45,
-            areaTotalReal: 65,
-            vagas: 1,
-            quantidade: 30,
-            valor: 380000
-          },
-          {
-            id: 'tipo-2',
-            nome: '2 Dormitórios',
-            tipologia: '2 quartos',
-            areaPrivativa: 65,
-            areaTotalReal: 85,
-            vagas: 1,
-            quantidade: 30,
-            valor: 480000
-          }
-        ]
+function Empreendimentos() {
+  // Mock data limpo e consistente
+  const mockEmpreendimentos: Empreendimento[] = [
+    {
+      id: '1',
+      nome: 'Residencial Solar das Flores',
+      tipo: 'residencial',
+      status: 'vendas',
+      imagem: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800',
+      localizacao: {
+        endereco: 'Rua das Palmeiras, 1500 - Centro',
+        cidade: 'Florianópolis',
+        estado: 'SC',
+        cep: '88010-120',
+        bairro: 'Centro'
       },
-      {
-        id: 'bloco-b',
-        nome: 'Torre B',
-        totalAndares: 15,
-        unidadesPorAndar: 4,
-        tipos: [
-          {
-            id: 'tipo-3',
-            nome: '3 Dormitórios + Suíte',
-            tipologia: '3 quartos',
-            areaPrivativa: 95,
-            areaTotalReal: 120,
-            vagas: 2,
-            quantidade: 60,
-            valor: 650000
-          }
-        ]
-      }
-    ],
-    documentos: [
-      {
-        id: 'doc-1',
-        nome: 'Alvará de Construção',
-        tipo: 'alvara',
-        arquivo: 'alvara_construcao.pdf',
-        dataUpload: '2024-01-10'
-      },
-      {
-        id: 'doc-2',
-        nome: 'Memorial Descritivo',
-        tipo: 'memorial',
-        arquivo: 'memorial_descritivo.pdf',
-        dataUpload: '2024-01-12'
-      },
-      {
-        id: 'doc-3',
-        nome: 'Plantas Aprovadas',
-        tipo: 'planta',
-        arquivo: 'plantas_aprovadas.dwg',
-        dataUpload: '2024-01-15'
-      }
-    ],
-    fotos: [
-      {
-        id: 'foto-1',
-        nome: 'Fachada Principal',
-        categoria: 'fachada',
-        arquivo: 'fachada_principal.jpg',
-        descricao: 'Vista frontal do empreendimento'
-      },
-      {
-        id: 'foto-2',
-        nome: 'Planta 1 Dorm',
-        categoria: 'planta_baixa',
-        arquivo: 'planta_1dorm.jpg',
-        descricao: 'Planta baixa apartamento 1 dormitório'
-      },
-      {
-        id: 'foto-3',
-        nome: 'Área de Lazer',
-        categoria: 'lazer',
-        arquivo: 'area_lazer.jpg',
-        descricao: 'Piscina e área de recreação'
-      }
-    ],
-    unidades: [],
-    totalUnidades: 120,
-    unidadesDisponiveis: 45,
-    unidadesReservadas: 15,
-    unidadesVendidas: 60,
-    valorMedio: 450000,
-    dataInclusao: '2024-01-10',
-    dataAtualizacao: '2024-07-28'
-  },
-  {
-    id: '2',
-    nome: 'Condomínio Harmony Village',
-    descricao: 'Condomínio horizontal de casas com segurança 24h, área verde preservada e clube completo na Barra da Tijuca.',
-    tipo: 'horizontal',
-    status: 'lancamento',
-    localizacao: {
-      estado: 'RJ',
-      cidade: 'Rio de Janeiro',
-      bairro: 'Barra da Tijuca',
-      endereco: 'Av. das Américas, 5000',
-      cep: '22640-102'
-    },
-    incorporadora: mockIncorporadoras[1],
-    construtora: mockConstrutoras[1],
-    datas: {
-      inicio: '2024-06-01',
-      previsaoTermino: '2026-06-30'
-    },
-    blocos: [
-      {
-        id: 'quadra-1',
-        nome: 'Quadra 1',
-        totalAndares: 2,
-        unidadesPorAndar: 1,
-        tipos: [
-          {
-            id: 'casa-tipo-1',
-            nome: 'Casa 3 Suítes',
-            tipologia: '3 quartos',
-            areaPrivativa: 180,
-            areaTotalReal: 300,
-            vagas: 2,
-            quantidade: 25,
-            valor: 850000
-          },
-          {
-            id: 'casa-tipo-2',
-            nome: 'Casa 4 Suítes',
-            tipologia: '4 quartos',
-            areaPrivativa: 220,
-            areaTotalReal: 400,
-            vagas: 3,
-            quantidade: 35,
-            valor: 1200000
-          }
-        ]
-      }
-    ],
-    documentos: [
-      {
-        id: 'doc-4',
-        nome: 'Projeto Aprovado',
-        tipo: 'planta',
-        arquivo: 'projeto_aprovado.pdf',
-        dataUpload: '2024-05-20'
-      },
-      {
-        id: 'doc-5',
-        nome: 'Licença Ambiental',
-        tipo: 'outro',
-        arquivo: 'licenca_ambiental.pdf',
-        dataUpload: '2024-05-22'
-      }
-    ],
-    fotos: [
-      {
-        id: 'foto-4',
-        nome: 'Portaria',
-        categoria: 'fachada',
-        arquivo: 'portaria.jpg',
-        descricao: 'Entrada principal do condomínio'
-      },
-      {
-        id: 'foto-5',
-        nome: 'Casa Decorada',
-        categoria: 'decorado',
-        arquivo: 'casa_decorada.jpg',
-        descricao: 'Casa modelo mobiliada'
-      }
-    ],
-    unidades: [],
-    totalUnidades: 85,
-    unidadesDisponiveis: 70,
-    unidadesReservadas: 10,
-    unidadesVendidas: 5,
-    valorMedio: 650000,
-    dataInclusao: '2024-05-20',
-    dataAtualizacao: '2024-07-25'
-  }
-];
-
-const mockImovelTerceiros: ImovelTerceiro[] = [
-  {
-    id: '1',
-    codigo: 'T-001',
-    tipo: 'apartamento',
-    endereco: 'Rua São João, 456 - Apto 82',
-    area: 85,
-    valor: 380000,
-    status: 'disponivel',
-    proprietario: 'Carlos Eduardo Silva',
-    corretor: 'Ana Paula Santos',
-    comissao: {
-      tipo: 'percentual',
-      valor: 6
-    },
-    fotos: ['foto1.jpg', 'foto2.jpg'],
-    documentos: ['matricula.pdf', 'iptu.pdf'],
-    observacoes: 'Apartamento reformado recentemente',
-    dataInclusao: '2024-07-15'
-  }
-];
-
-const mockImoveisAluguel: ImovelAluguel[] = [
-  {
-    id: '1',
-    codigo: 'A-001',
-    tipo: 'apartamento',
-    endereco: 'Av. Paulista, 1000 - Apto 150',
-    area: 75,
-    valores: {
-      aluguel: 3500,
-      iptu: 280,
-      condominio: 450
-    },
-    status: 'locado',
-    administrador: 'proprio',
-    contratoAtivo: {
-      inquilino: 'Roberto Silva Costa',
+      unidadesTotal: 120,
+      unidadesVendidas: 45,
+      unidadesReservadas: 25,
+      valorTotal: 'R$ 24.000.000',
+      valorMedio: 350000,
       dataInicio: '2024-01-15',
-      dataFim: '2025-01-15',
-      dataVencimento: '2024-08-15'
-    },
-    documentos: ['contrato_locacao.pdf', 'vistoria.pdf'],
-    dataInclusao: '2023-12-20'
-  }
-];
-// ============================
-// COMPONENTS
-// ============================
-
-// Overview do módulo
-function EmpreendimentosOverview() {
-  const navigate = useNavigate();
-  const [empreendimentos] = useState<Empreendimento[]>(mockEmpreendimentos);
-  const [imovelTerceiros] = useState<ImovelTerceiro[]>(mockImovelTerceiros);
-  const [imoveisAluguel] = useState<ImovelAluguel[]>(mockImoveisAluguel);
-
-  const estatisticas = {
-    totalEmpreendimentos: empreendimentos.length,
-    empreendimentosAtivos: empreendimentos.filter(e => e.status !== 'pronto').length,
-    totalUnidades: empreendimentos.reduce((sum, e) => sum + e.totalUnidades, 0),
-    unidadesDisponiveis: empreendimentos.reduce((sum, e) => sum + e.unidadesDisponiveis, 0),
-    imovelTerceiros: imovelTerceiros.length,
-    imoveisAluguel: imoveisAluguel.length,
-    imoveisDisponiveis: imovelTerceiros.filter(i => i.status === 'disponivel').length + 
-                      imoveisAluguel.filter(i => i.status === 'disponivel').length
-  };
-
-  const cards = [
-    {
-      titulo: 'Empreendimentos',
-      valor: estatisticas.totalEmpreendimentos,
-      href: '/empreendimentos/construtora',
-      icon: BuildingOffice2Icon,
-      cor: 'text-blue-600',
-      corFundo: 'bg-blue-50',
-      descricao: `${estatisticas.empreendimentosAtivos} em andamento`
-    },
-    {
-      titulo: 'Unidades Totais',
-      valor: estatisticas.totalUnidades,
-      href: '/empreendimentos/construtora',
-      icon: Square3Stack3DIcon,
-      cor: 'text-green-600',
-      corFundo: 'bg-green-50',
-      descricao: `${estatisticas.unidadesDisponiveis} disponíveis`
-    },
-    {
-      titulo: 'Imóveis Terceiros',
-      valor: estatisticas.imovelTerceiros,
-      href: '/empreendimentos/terceiros',
-      icon: HomeIcon,
-      cor: 'text-purple-600',
-      corFundo: 'bg-purple-50',
-      descricao: 'Captação externa'
+      dataPrevista: '2025-12-30',
+      descricao: 'Empreendimento residencial de alto padrão com 120 unidades, localizado no coração de Florianópolis.',
+      responsaveis: {
+        tecnico: 'Eng. João Silva',
+        comercial: 'Maria Santos',
+        juridico: 'Dr. Carlos Oliveira'
+      },
+      tiposUnidade: [
+        { 
+          nome: 'Tipo 1', 
+          tipologia: '2 quartos', 
+          areaPrivativa: '65m²', 
+          vagasGaragem: 1, 
+          quantidade: 60, 
+          preco: 'R$ 320.000' 
+        },
+        { 
+          nome: 'Tipo 2', 
+          tipologia: '3 quartos', 
+          areaPrivativa: '85m²', 
+          vagasGaragem: 2, 
+          quantidade: 60, 
+          preco: 'R$ 450.000' 
+        }
+      ],
+      blocos: [
+        {
+          id: 'bloco1',
+          nome: 'Bloco A',
+          totalAndares: 10,
+          unidadesPorAndar: 4,
+          tipos: [
+            {
+              id: 'tipo1',
+              nome: 'Tipo 1',
+              tipologia: '2 quartos',
+              areaPrivativa: 65,
+              vagas: 1,
+              valor: 320000
+            }
+          ]
+        }
+      ],
+      datas: {
+        inicio: '2024-01-15',
+        previsaoTermino: '2025-12-30'
+      }
     },
     {
-      titulo: 'Imóveis Aluguel',
-      valor: estatisticas.imoveisAluguel,
-      href: '/empreendimentos/aluguel',
-      icon: KeyIcon,
-      cor: 'text-orange-600',
-      corFundo: 'bg-orange-50',
-      descricao: 'Gestão de locação'
+      id: '2', 
+      nome: 'Comercial Business Center',
+      tipo: 'comercial',
+      status: 'construcao',
+      imagem: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800',
+      localizacao: {
+        endereco: 'Av. Principal, 2000 - Empresarial',
+        cidade: 'São Paulo',
+        estado: 'SP',
+        cep: '01310-100',
+        bairro: 'Empresarial'
+      },
+      unidadesTotal: 50,
+      unidadesVendidas: 20,
+      unidadesReservadas: 15,
+      valorTotal: 'R$ 15.000.000',
+      valorMedio: 250000,
+      dataInicio: '2024-03-01',
+      dataPrevista: '2025-08-15',
+      descricao: 'Centro empresarial moderno com salas comerciais de diversos tamanhos.',
+      responsaveis: {
+        tecnico: 'Eng. Ana Costa',
+        comercial: 'Pedro Lima',
+        juridico: 'Dra. Julia Mendes'
+      },
+      tiposUnidade: [
+        { 
+          nome: 'Sala Pequena', 
+          tipologia: 'Comercial', 
+          areaPrivativa: '30m²', 
+          vagasGaragem: 1, 
+          quantidade: 25, 
+          preco: 'R$ 180.000' 
+        },
+        { 
+          nome: 'Sala Grande', 
+          tipologia: 'Comercial', 
+          areaPrivativa: '60m²', 
+          vagasGaragem: 2, 
+          quantidade: 25, 
+          preco: 'R$ 350.000' 
+        }
+      ],
+      blocos: [
+        {
+          id: 'bloco1',
+          nome: 'Torre Comercial',
+          totalAndares: 15,
+          unidadesPorAndar: 3,
+          tipos: [
+            {
+              id: 'sala1',
+              nome: 'Sala Pequena',
+              tipologia: 'Comercial',
+              areaPrivativa: 30,
+              vagas: 1,
+              valor: 180000
+            }
+          ]
+        }
+      ],
+      datas: {
+        inicio: '2024-03-01',
+        previsaoTermino: '2025-08-15'
+      }
     }
   ];
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Empreendimentos</h1>
-          <p className="text-gray-600">Gestão completa de imóveis e empreendimentos</p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => navigate('/empreendimentos/construtora/novo')}
-            className={buttonPrimary}
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Novo Empreendimento
-          </button>
-        </div>
-      </div>
+  // Função utilitária para formatar moeda
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map((card) => {
-          const IconComponent = card.icon;
-          return (
-            <button
-              key={card.titulo}
-              onClick={() => navigate(card.href)}
-              className={`${cardHover} p-6 text-left`}
-            >
-              <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${card.corFundo}`}>
-                  <IconComponent className={`h-6 w-6 ${card.cor}`} />
-                </div>
-                <div className="ml-4 flex-1">
-                  <p className="text-sm font-medium text-gray-600">{card.titulo}</p>
-                  <p className="text-2xl font-bold text-gray-900">{card.valor}</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 mt-3">{card.descricao}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Performance por Empreendimento */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance de Vendas</h3>
-          <div className="space-y-4">
-            {empreendimentos.map((emp) => {
-              const vendaPercentual = ((emp.unidadesVendidas + emp.unidadesReservadas) / emp.totalUnidades) * 100;
-              return (
-                <div key={emp.id} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-900">{emp.nome}</span>
-                    <span className="text-sm text-gray-600">{vendaPercentual.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${vendaPercentual}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>{emp.unidadesVendidas + emp.unidadesReservadas} vendidas/reservadas</span>
-                    <span>{emp.totalUnidades} total</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => navigate('/empreendimentos/construtora/novo')}
-              className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-            >
-              <PlusIcon className="h-6 w-6 text-blue-600 mb-2" />
-              <span className="text-sm text-blue-700 font-medium">Novo Empreendimento</span>
-            </button>
-            <button
-              onClick={() => navigate('/empreendimentos/terceiros/novo')}
-              className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-            >
-              <HomeIcon className="h-6 w-6 text-purple-600 mb-2" />
-              <span className="text-sm text-purple-700 font-medium">Imóvel Terceiro</span>
-            </button>
-            <button
-              onClick={() => navigate('/empreendimentos/aluguel/novo')}
-              className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
-            >
-              <KeyIcon className="h-6 w-6 text-orange-600 mb-2" />
-              <span className="text-sm text-orange-700 font-medium">Imóvel Aluguel</span>
-            </button>
-            <button
-              className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-            >
-              <DocumentArrowUpIcon className="h-6 w-6 text-green-600 mb-2" />
-              <span className="text-sm text-green-700 font-medium">Upload Tabela</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-// Lista de Empreendimentos de Construtora
-function EmpreendimentosConstrutora() {
-  const navigate = useNavigate();
-  const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>(mockEmpreendimentos);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [tipoFilter, setTipoFilter] = useState<string>('todos');
-
-  const filteredEmpreendimentos = empreendimentos.filter(emp => {
-    const matchesSearch = 
-      emp.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.localizacao.cidade.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.localizacao.bairro.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'todos' || emp.status === statusFilter;
-    const matchesTipo = tipoFilter === 'todos' || emp.tipo === tipoFilter;
-    
-    return matchesSearch && matchesStatus && matchesTipo;
+  // Estados principais
+  const [currentView, setCurrentView] = useState<string>('lista');
+  const [filtros, setFiltros] = useState({
+    busca: '',
+    status: '',
+    tipo: ''
   });
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Empreendimentos de Construtora</h1>
-          <p className="text-gray-600">Gerencie empreendimentos próprios</p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => navigate('/empreendimentos/construtora/novo')}
-            className={buttonPrimary}
+  // Navegação simulada
+  const navigate = (path: string): void => {
+    if (path === '/empreendimentos') {
+      setCurrentView('lista');
+    } else if (path.includes('/novo')) {
+      setCurrentView('formulario');
+    } else if (path.includes('/editar')) {
+      setCurrentView('formulario');
+    } else if (path.includes('/detalhes')) {
+      setCurrentView('detalhes');
+    } else if (path.includes('/mapa')) {
+      setCurrentView('mapa');
+    }
+  };
+
+  // Lista de Empreendimentos - VERSÃO CORRIGIDA
+  function ListaEmpreendimentos() {
+    const empreendimentosFiltrados = mockEmpreendimentos.filter(emp => {
+      const matchBusca = emp.nome.toLowerCase().includes(filtros.busca.toLowerCase());
+      const matchStatus = !filtros.status || emp.status === filtros.status;
+      const matchTipo = !filtros.tipo || emp.tipo === filtros.tipo;
+      return matchBusca && matchStatus && matchTipo;
+    });
+
+    return (
+      <div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Empreendimentos</h1>
+            <p className="text-gray-600 mt-2">Gerencie todos os empreendimentos da empresa</p>
+          </div>
+          <button 
+            onClick={() => navigate('/empreendimentos/novo')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <PlusIcon className="h-5 w-5 mr-2" />
+            <Plus className="w-5 h-5" />
             Novo Empreendimento
           </button>
+        </div>
+
+        {/* Filtros */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Buscar empreendimentos..."
+                  value={filtros.busca}
+                  onChange={(e) => setFiltros({...filtros, busca: e.target.value})}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <select
+                value={filtros.status}
+                onChange={(e) => setFiltros({...filtros, status: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todos os status</option>
+                <option value="planejamento">Planejamento</option>
+                <option value="construcao">Construção</option>
+                <option value="vendas">Vendas</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+            
+            <div>
+              <select
+                value={filtros.tipo}
+                onChange={(e) => setFiltros({...filtros, tipo: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Todos os tipos</option>
+                <option value="residencial">Residencial</option>
+                <option value="comercial">Comercial</option>
+                <option value="misto">Misto</option>
+                <option value="rural">Rural</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid de Cards - VERSÃO MELHORADA */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {empreendimentosFiltrados.map((emp) => {
+            const progresso = ((emp.unidadesVendidas + emp.unidadesReservadas) / emp.unidadesTotal) * 100;
+            const unidadesDisponiveis = emp.unidadesTotal - emp.unidadesVendidas - emp.unidadesReservadas;
+            
+            return (
+              <div 
+                key={emp.id} 
+                onClick={() => navigate(`/empreendimentos/detalhes/${emp.id}`)}
+                className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer group overflow-hidden transform hover:-translate-y-1"
+              >
+                {/* Foto de Destaque */}
+                <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
+                  <img 
+                    src={emp.imagem} 
+                    alt={emp.nome}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  
+                  {/* Status Badge */}
+                  <div className="absolute top-4 right-4">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-md ${
+                      emp.status === 'vendas' ? 'bg-green-500 text-white' :
+                      emp.status === 'construcao' ? 'bg-blue-500 text-white' : 
+                      emp.status === 'planejamento' ? 'bg-yellow-500 text-white' : 'bg-gray-500 text-white'
+                    }`}>
+                      {emp.status === 'vendas' ? 'Em Vendas' :
+                       emp.status === 'construcao' ? 'Em Construção' :
+                       emp.status === 'planejamento' ? 'Planejamento' : 'Pronto'}
+                    </span>
+                  </div>
+
+                  {/* Overlay com ações rápidas */}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/empreendimentos/mapa/${emp.id}`);
+                        }}
+                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                        title="Ver Mapa"
+                      >
+                        <Map className="h-5 w-5 text-gray-700" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/empreendimentos/editar/${emp.id}`);
+                        }}
+                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                        title="Editar"
+                      >
+                        <Edit2 className="h-5 w-5 text-gray-700" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conteúdo do Card */}
+                <div className="p-6">
+                  {/* Título e Localização */}
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                      {emp.nome}
+                    </h3>
+                    <div className="flex items-center text-gray-600 text-sm">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      <span>{emp.localizacao.cidade} - {emp.localizacao.bairro}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 capitalize">{emp.tipo}</p>
+                  </div>
+
+                  {/* Valor e Unidades */}
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <p className="text-sm text-gray-500">A partir de</p>
+                      <p className="text-lg font-bold text-green-600">{formatCurrency(emp.valorMedio)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">Total de unidades</p>
+                      <p className="text-lg font-bold text-gray-900">{emp.unidadesTotal}</p>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progresso */}
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs text-gray-500 mb-2">
+                      <span>Progresso de Vendas</span>
+                      <span className="font-semibold">{progresso.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${progresso}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-2">
+                      <span className="flex items-center">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                        {unidadesDisponiveis} disponíveis
+                      </span>
+                      <span className="flex items-center">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                        {emp.unidadesVendidas} vendidas
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tags dos Tipos de Unidades */}
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {emp.tiposUnidade.slice(0, 2).map((tipo, index) => (
+                      <span 
+                        key={index}
+                        className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700"
+                      >
+                        {tipo.tipologia}
+                      </span>
+                    ))}
+                    {emp.tiposUnidade.length > 2 && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700">
+                        +{emp.tiposUnidade.length - 2} tipos
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Data de Entrega */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Previsão de entrega:</span>
+                    <span className="font-medium text-orange-600">
+                      {new Date(emp.datas.previsaoTermino).toLocaleDateString('pt-BR', { 
+                        month: 'short', 
+                        year: 'numeric' 
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer com Call to Action */}
+                <div className="px-6 pb-6">
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <span className="text-sm text-gray-500">
+                      {emp.blocos.length} {emp.blocos.length === 1 ? 'bloco' : 'blocos'}
+                    </span>
+                    <div className="flex items-center text-blue-600 text-sm font-medium">
+                      Ver detalhes
+                      <Eye className="h-4 w-4 ml-1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Estado vazio */}
+        {empreendimentosFiltrados.length === 0 && (
+          <div className="text-center py-12">
+            <Building className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+            <p className="text-gray-600 mb-4">Tente ajustar os filtros ou cadastre um novo empreendimento</p>
+            <button 
+              onClick={() => navigate('/empreendimentos/novo')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Cadastrar Empreendimento
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Formulário de Cadastro/Edição - VERSÃO CORRIGIDA
+  function FormularioEmpreendimento() {
+    const [formData, setFormData] = useState<FormDataType>({
+      nome: '',
+      tipo: 'residencial',
+      status: 'planejamento',
+      localizacao: {
+        endereco: '',
+        cidade: '',
+        estado: '',
+        cep: '',
+        bairro: ''
+      },
+      responsaveis: {
+        tecnico: '',
+        comercial: '',
+        juridico: ''
+      },
+      descricao: '',
+      dataInicio: '',
+      dataPrevista: '',
+      valorTotal: '',
+      valorMedio: '',
+      blocos: [{
+        id: 1,
+        nome: 'Bloco A',
+        totalAndares: 10,
+        unidadesPorAndar: 4
+      }],
+      tiposApartamento: [{
+        id: 1,
+        nome: 'Tipo 1',
+        tipologia: '2 quartos',
+        areaPrivativa: '',
+        vagasGaragem: 1,
+        planta: null,
+        preco: ''
+      }]
+    });
+
+    // Funções para gerenciar blocos
+    const adicionarBloco = (): void => {
+      setFormData({
+        ...formData,
+        blocos: [...formData.blocos, {
+          id: Date.now(),
+          nome: `Bloco ${String.fromCharCode(65 + formData.blocos.length)}`,
+          totalAndares: 10,
+          unidadesPorAndar: 4
+        }]
+      });
+    };
+
+    const removerBloco = (id: number): void => {
+      if (formData.blocos.length > 1) {
+        const novosBlocos = formData.blocos.filter(bloco => bloco.id !== id);
+        setFormData({...formData, blocos: novosBlocos});
+      }
+    };
+
+    const atualizarBloco = (id: number, campo: string, valor: any): void => {
+      const novosBlocos = formData.blocos.map(bloco => 
+        bloco.id === id ? {...bloco, [campo]: valor} : bloco
+      );
+      setFormData({...formData, blocos: novosBlocos});
+    };
+
+    // Funções para gerenciar tipos de apartamento
+    const adicionarTipoApartamento = (): void => {
+      setFormData({
+        ...formData,
+        tiposApartamento: [...formData.tiposApartamento, {
+          id: Date.now(),
+          nome: `Tipo ${formData.tiposApartamento.length + 1}`,
+          tipologia: '2 quartos',
+          areaPrivativa: '',
+          vagasGaragem: 1,
+          planta: null,
+          preco: ''
+        }]
+      });
+    };
+
+    const removerTipoApartamento = (id: number): void => {
+      if (formData.tiposApartamento.length > 1) {
+        const novosTipos = formData.tiposApartamento.filter(tipo => tipo.id !== id);
+        setFormData({...formData, tiposApartamento: novosTipos});
+      }
+    };
+
+    const atualizarTipoApartamento = (id: number, campo: string, valor: any): void => {
+      const novosTipos = formData.tiposApartamento.map(tipo => 
+        tipo.id === id ? {...tipo, [campo]: valor} : tipo
+      );
+      setFormData({...formData, tiposApartamento: novosTipos});
+    };
+
+    const handleSubmit = (): void => {
+      console.log('Dados do formulário:', formData);
+      navigate('/empreendimentos');
+    };
+
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Novo Empreendimento</h1>
+            <p className="text-gray-600 mt-2">Cadastre um novo empreendimento no sistema</p>
+          </div>
           <button
             onClick={() => navigate('/empreendimentos')}
-            className={buttonOutline}
+            className="text-gray-500 hover:text-gray-700"
           >
-            Voltar
+            <X className="w-6 h-6" />
           </button>
         </div>
-      </div>
 
-      {/* Filters */}
-      <div className={`${card} p-6`}>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nome, cidade, bairro..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={`${formInput} pl-10`}
-            />
-          </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className={formInput}
-          >
-            <option value="todos">Todos os Status</option>
-            <option value="lancamento">Lançamento</option>
-            <option value="em_obras">Em Obras</option>
-            <option value="pronto">Pronto</option>
-          </select>
-
-          <select
-            value={tipoFilter}
-            onChange={(e) => setTipoFilter(e.target.value)}
-            className={formInput}
-          >
-            <option value="todos">Todos os Tipos</option>
-            <option value="vertical">Vertical</option>
-            <option value="horizontal">Horizontal</option>
-          </select>
-
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setStatusFilter('todos');
-              setTipoFilter('todos');
-            }}
-            className={buttonOutline}
-          >
-            Limpar Filtros
-          </button>
-        </div>
-      </div>
-
-      {/* Empreendimentos Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredEmpreendimentos.map((emp) => (
-          <div key={emp.id} className={cardHover}>
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{emp.nome}</h3>
-                  <p className="text-sm text-gray-500 capitalize">{emp.tipo}</p>
-                </div>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  emp.status === 'lancamento' ? 'bg-blue-100 text-blue-800' :
-                  emp.status === 'em_obras' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                }`}>
-                  {emp.status === 'lancamento' ? 'Lançamento' :
-                   emp.status === 'em_obras' ? 'Em Obras' : 'Pronto'}
-                </span>
+        <div className="space-y-8">
+          {/* Informações Básicas */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Informações Básicas</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nome do Empreendimento *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nome}
+                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ex: Residencial Solar das Flores"
+                />
               </div>
-
-              {/* Localização */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <MapPinIcon className="h-4 w-4 mr-2" />
-                  {emp.localizacao.cidade} - {emp.localizacao.bairro}
-                </div>
-                <p className="text-sm text-gray-500">{emp.localizacao.endereco}</p>
-              </div>
-              {/* Estatísticas de Unidades */}
-              <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-500">Total:</span>
-                    <p className="font-semibold text-gray-900">{emp.totalUnidades}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Disponíveis:</span>
-                    <p className="font-semibold text-green-600">{emp.unidadesDisponiveis}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Reservadas:</span>
-                    <p className="font-semibold text-yellow-600">{emp.unidadesReservadas}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Vendidas:</span>
-                    <p className="font-semibold text-blue-600">{emp.unidadesVendidas}</p>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Progresso de Vendas</span>
-                    <span>{(((emp.unidadesVendidas + emp.unidadesReservadas) / emp.totalUnidades) * 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${((emp.unidadesVendidas + emp.unidadesReservadas) / emp.totalUnidades) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Valor Médio e Empresas */}
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Valor Médio:</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(emp.valorMedio)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Incorporadora:</span>
-                  <span className="text-gray-700">{emp.incorporadora.nome}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Construtora:</span>
-                  <span className="text-gray-700">{emp.construtora.nome}</span>
-                </div>
-              </div>
-
-              {/* Datas */}
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Início:</span>
-                  <span>{new Date(emp.datas.inicio).toLocaleDateString('pt-BR')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Previsão Término:</span>
-                  <span className="text-orange-600">{new Date(emp.datas.previsaoTermino).toLocaleDateString('pt-BR')}</span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => navigate(`/empreendimentos/construtora/${emp.id}`)}
-                    className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
-                    title="Ver detalhes"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => navigate(`/empreendimentos/construtora/${emp.id}/mapa`)}
-                    className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"
-                    title="Mapa de disponibilidade"
-                  >
-                    <Square3Stack3DIcon className="h-4 w-4" />
-                  </button>
-
-                  <button
-                    onClick={() => navigate(`/empreendimentos/construtora/${emp.id}/editar`)}
-                    className="text-yellow-600 hover:text-yellow-800 p-1 hover:bg-yellow-50 rounded"
-                    title="Editar"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-
-                  <button
-                    className="text-purple-600 hover:text-purple-800 p-1 hover:bg-purple-50 rounded"
-                    title="Upload tabela"
-                  >
-                    <DocumentArrowUpIcon className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (confirm('Tem certeza que deseja excluir este empreendimento?')) {
-                      setEmpreendimentos(prev => prev.filter(e => e.id !== emp.id));
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
-                  title="Excluir"
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo *</label>
+                <select
+                  value={formData.tipo}
+                  onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                  <option value="residencial">Residencial</option>
+                  <option value="comercial">Comercial</option>
+                  <option value="misto">Misto</option>
+                  <option value="rural">Rural</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="planejamento">Planejamento</option>
+                  <option value="aprovacao">Aprovação</option>
+                  <option value="construcao">Construção</option>
+                  <option value="vendas">Vendas</option>
+                  <option value="entregue">Entregue</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor Total Estimado
+                </label>
+                <input
+                  type="text"
+                  value={formData.valorTotal}
+                  onChange={(e) => setFormData({...formData, valorTotal: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="R$ 0,00"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor Médio por Unidade
+                </label>
+                <input
+                  type="text"
+                  value={formData.valorMedio}
+                  onChange={(e) => setFormData({...formData, valorMedio: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="R$ 0,00"
+                />
               </div>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Empty State */}
-      {filteredEmpreendimentos.length === 0 && (
-        <div className="text-center py-12">
-          <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum empreendimento encontrado</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {searchTerm || statusFilter !== 'todos' || tipoFilter !== 'todos'
-              ? 'Tente ajustar os filtros de busca.'
-              : 'Comece criando seu primeiro empreendimento.'}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-// Formulário de Cadastro/Edição de Empreendimento
-function EmpreendimentoForm() {
-  const navigate = useNavigate();
-  const { id } = useParams();
-  const isEditing = !!id;
-  
-  // Estado do formulário
-  const [formData, setFormData] = useState({
-    nome: '',
-    descricao: '',
-    tipo: 'vertical' as 'vertical' | 'horizontal',
-    status: 'lancamento' as 'lancamento' | 'em_obras' | 'pronto',
-    localizacao: {
-      estado: '',
-      cidade: '',
-      bairro: '',
-      endereco: '',
-      cep: ''
-    },
-    incorporadora: {
-      id: '',
-      nome: '',
-      cnpj: ''
-    },
-    construtora: {
-      id: '',
-      nome: '',
-      cnpj: ''
-    },
-    datas: {
-      inicio: '',
-      previsaoTermino: '',
-      dataEntrega: ''
-    },
-    blocos: [] as Bloco[],
-    totalUnidades: 0,
-    unidadesDisponiveis: 0,
-    unidadesReservadas: 0,
-    unidadesVendidas: 0,
-    valorMedio: 0,
-    documentos: [] as Documento[],
-    fotos: [] as Foto[]
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Carregar dados para edição
-  useEffect(() => {
-    if (isEditing) {
-      const empreendimento = mockEmpreendimentos.find(e => e.id === id);
-      if (empreendimento) {
-        setFormData({
-          nome: empreendimento.nome,
-          descricao: empreendimento.descricao,
-          tipo: empreendimento.tipo,
-          status: empreendimento.status,
-          localizacao: empreendimento.localizacao,
-          incorporadora: empreendimento.incorporadora,
-          construtora: empreendimento.construtora,
-          datas: {
-            inicio: empreendimento.datas.inicio,
-            previsaoTermino: empreendimento.datas.previsaoTermino,
-            dataEntrega: empreendimento.datas.dataEntrega || ''
-          },
-          blocos: empreendimento.blocos,
-          totalUnidades: empreendimento.totalUnidades,
-          unidadesDisponiveis: empreendimento.unidadesDisponiveis,
-          unidadesReservadas: empreendimento.unidadesReservadas,
-          unidadesVendidas: empreendimento.unidadesVendidas,
-          valorMedio: empreendimento.valorMedio,
-          documentos: empreendimento.documentos,
-          fotos: empreendimento.fotos
-        });
-      }
-    }
-  }, [id, isEditing]);
-
-  // Validação do formulário
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.nome.trim()) newErrors.nome = 'Nome é obrigatório';
-    if (!formData.descricao.trim()) newErrors.descricao = 'Descrição é obrigatória';
-    if (!formData.localizacao.estado.trim()) newErrors.estado = 'Estado é obrigatório';
-    if (!formData.localizacao.cidade.trim()) newErrors.cidade = 'Cidade é obrigatória';
-    if (!formData.localizacao.bairro.trim()) newErrors.bairro = 'Bairro é obrigatório';
-    if (!formData.localizacao.endereco.trim()) newErrors.endereco = 'Endereço é obrigatório';
-    if (!formData.localizacao.cep.trim()) newErrors.cep = 'CEP é obrigatório';
-    if (!formData.incorporadora.nome.trim()) newErrors.incorporadoraNome = 'Nome da incorporadora é obrigatório';
-    if (!formData.incorporadora.cnpj.trim()) newErrors.incorporadoraCnpj = 'CNPJ da incorporadora é obrigatório';
-    if (!formData.construtora.nome.trim()) newErrors.construtoranome = 'Nome da construtora é obrigatório';
-    if (!formData.construtora.cnpj.trim()) newErrors.construtoracnpj = 'CNPJ da construtora é obrigatório';
-    if (!formData.datas.inicio) newErrors.dataInicio = 'Data de início é obrigatória';
-    if (!formData.datas.previsaoTermino) newErrors.dataTermino = 'Data de término é obrigatória';
-    if (formData.valorMedio <= 0) newErrors.valorMedio = 'Valor médio deve ser maior que zero';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Salvar formulário
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    setLoading(true);
-    
-    try {
-      // Simular salvamento
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Dados do formulário:', formData);
-      
-      // Redirecionar após salvar
-      navigate('/empreendimentos/construtora');
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Atualizar campo do formulário
-  const updateField = (path: string, value: any) => {
-    setFormData(prev => {
-      const newData = { ...prev };
-      const keys = path.split('.');
-      let current: any = newData;
-      
-      for (let i = 0; i < keys.length - 1; i++) {
-        current = current[keys[i]];
-      }
-      
-      current[keys[keys.length - 1]] = value;
-      return newData;
-    });
-  };
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
-          </h1>
-          <p className="text-gray-600">
-            {isEditing ? 'Altere as informações do empreendimento' : 'Cadastro completo com documentos'}
-          </p>
-        </div>
-        <button 
-          onClick={() => navigate('/empreendimentos/construtora')} 
-          className={buttonOutline}
-        >
-          Voltar
-        </button>
-      </div>
-
-      {/* Formulário */}
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Informações Básicas */}
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Informações Básicas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome do Empreendimento *
-              </label>
-              <input
-                type="text"
-                value={formData.nome}
-                onChange={(e) => updateField('nome', e.target.value)}
-                className={`${formInput} ${errors.nome ? 'border-red-500' : ''}`}
-                placeholder="Ex: Residencial Jardim das Flores"
-              />
-              {errors.nome && <p className="text-red-500 text-sm mt-1">{errors.nome}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo *
-              </label>
-              <select
-                value={formData.tipo}
-                onChange={(e) => updateField('tipo', e.target.value)}
-                className={formInput}
-              >
-                <option value="vertical">Vertical</option>
-                <option value="horizontal">Horizontal</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descrição *
-              </label>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
               <textarea
                 value={formData.descricao}
-                onChange={(e) => updateField('descricao', e.target.value)}
+                onChange={(e) => setFormData({...formData, descricao: e.target.value})}
                 rows={3}
-                className={`${formInput} ${errors.descricao ? 'border-red-500' : ''}`}
-                placeholder="Descrição detalhada do empreendimento, diferenciais, área de lazer, etc."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Descreva as características do empreendimento..."
               />
-              {errors.descricao && <p className="text-red-500 text-sm mt-1">{errors.descricao}</p>}
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status *
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => updateField('status', e.target.value)}
-                className={formInput}
+          {/* Localização */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Localização</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Endereço Completo *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.localizacao.endereco}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    localizacao: {...formData.localizacao, endereco: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Rua, número"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bairro *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.localizacao.bairro}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    localizacao: {...formData.localizacao, bairro: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cidade *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.localizacao.cidade}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    localizacao: {...formData.localizacao, cidade: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Estado *</label>
+                <select
+                  value={formData.localizacao.estado}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    localizacao: {...formData.localizacao, estado: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="SP">São Paulo</option>
+                  <option value="RJ">Rio de Janeiro</option>
+                  <option value="MG">Minas Gerais</option>
+                  <option value="SC">Santa Catarina</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                <input
+                  type="text"
+                  value={formData.localizacao.cep}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    localizacao: {...formData.localizacao, cep: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="00000-000"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Blocos do Empreendimento */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Blocos do Empreendimento</h2>
+              <button
+                type="button"
+                onClick={adicionarBloco}
+                className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <option value="lancamento">Lançamento</option>
-                <option value="em_obras">Em Obras</option>
-                <option value="pronto">Pronto</option>
-              </select>
+                <Plus className="w-4 h-4" />
+                Adicionar Bloco
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {formData.blocos.map((bloco, index) => (
+                <div key={bloco.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-900">Bloco {index + 1}</h3>
+                    {formData.blocos.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removerBloco(bloco.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Bloco</label>
+                      <input
+                        type="text"
+                        value={bloco.nome}
+                        onChange={(e) => atualizarBloco(bloco.id, 'nome', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Ex: Bloco A"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Número de Andares</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={bloco.totalAndares}
+                        onChange={(e) => atualizarBloco(bloco.id, 'totalAndares', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Unidades por Andar</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={bloco.unidadesPorAndar}
+                        onChange={(e) => atualizarBloco(bloco.id, 'unidadesPorAndar', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
 
-        {/* Localização */}
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Localização</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado *
-              </label>
-              <input
-                type="text"
-                value={formData.localizacao.estado}
-                onChange={(e) => updateField('localizacao.estado', e.target.value)}
-                className={`${formInput} ${errors.estado ? 'border-red-500' : ''}`}
-                placeholder="Ex: SP"
-              />
-              {errors.estado && <p className="text-red-500 text-sm mt-1">{errors.estado}</p>}
+          {/* Tipos de Apartamento */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Tipos de Apartamento (Plantas)</h2>
+              <button
+                type="button"
+                onClick={adicionarTipoApartamento}
+                className="flex items-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar Tipo
+              </button>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cidade *
-              </label>
-              <input
-                type="text"
-                value={formData.localizacao.cidade}
-                onChange={(e) => updateField('localizacao.cidade', e.target.value)}
-                className={`${formInput} ${errors.cidade ? 'border-red-500' : ''}`}
-                placeholder="Ex: São Paulo"
-              />
-              {errors.cidade && <p className="text-red-500 text-sm mt-1">{errors.cidade}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bairro *
-              </label>
-              <input
-                type="text"
-                value={formData.localizacao.bairro}
-                onChange={(e) => updateField('localizacao.bairro', e.target.value)}
-                className={`${formInput} ${errors.bairro ? 'border-red-500' : ''}`}
-                placeholder="Ex: Vila Madalena"
-              />
-              {errors.bairro && <p className="text-red-500 text-sm mt-1">{errors.bairro}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                CEP *
-              </label>
-              <input
-                type="text"
-                value={formData.localizacao.cep}
-                onChange={(e) => updateField('localizacao.cep', e.target.value)}
-                className={`${formInput} ${errors.cep ? 'border-red-500' : ''}`}
-                placeholder="Ex: 05434-020"
-              />
-              {errors.cep && <p className="text-red-500 text-sm mt-1">{errors.cep}</p>}
-            </div>
-
-            <div className="md:col-span-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Endereço Completo *
-              </label>
-              <input
-                type="text"
-                value={formData.localizacao.endereco}
-                onChange={(e) => updateField('localizacao.endereco', e.target.value)}
-                className={`${formInput} ${errors.endereco ? 'border-red-500' : ''}`}
-                placeholder="Ex: Rua das Flores, 123"
-              />
-              {errors.endereco && <p className="text-red-500 text-sm mt-1">{errors.endereco}</p>}
+            
+            <div className="space-y-6">
+              {formData.tiposApartamento.map((tipo) => (
+                <div key={tipo.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-900">{tipo.nome}</h3>
+                    {formData.tiposApartamento.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removerTipoApartamento(tipo.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Tipo</label>
+                      <input
+                        type="text"
+                        value={tipo.nome}
+                        onChange={(e) => atualizarTipoApartamento(tipo.id, 'nome', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Ex: Tipo 1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Tipologia</label>
+                      <select
+                        value={tipo.tipologia}
+                        onChange={(e) => atualizarTipoApartamento(tipo.id, 'tipologia', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="1 quarto">1 quarto</option>
+                        <option value="2 quartos">2 quartos</option>
+                        <option value="3 quartos">3 quartos</option>
+                        <option value="4 quartos">4 quartos</option>
+                        <option value="Cobertura">Cobertura</option>
+                        <option value="Studio">Studio</option>
+                        <option value="Loft">Loft</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Área Privativa (m²)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={tipo.areaPrivativa}
+                        onChange={(e) => atualizarTipoApartamento(tipo.id, 'areaPrivativa', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Ex: 65.50"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Vagas de Garagem</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tipo.vagasGaragem}
+                        onChange={(e) => atualizarTipoApartamento(tipo.id, 'vagasGaragem', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Preço Base (R$)</label>
+                      <input
+                        type="text"
+                        value={tipo.preco}
+                        onChange={(e) => atualizarTipoApartamento(tipo.id, 'preco', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="R$ 350.000,00"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Planta Baixa</label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => {
+                          const file = e.target.files ? e.target.files[0] : null;
+                          atualizarTipoApartamento(tipo.id, 'planta', file);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-        {/* Empresas Responsáveis */}
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Empresas Responsáveis</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Incorporadora</h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.incorporadora.nome}
-                    onChange={(e) => updateField('incorporadora.nome', e.target.value)}
-                    className={`${formInput} ${errors.incorporadoraNome ? 'border-red-500' : ''}`}
-                    placeholder="Nome da incorporadora"
-                  />
-                  {errors.incorporadoraNome && <p className="text-red-500 text-sm mt-1">{errors.incorporadoraNome}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CNPJ *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.incorporadora.cnpj}
-                    onChange={(e) => updateField('incorporadora.cnpj', e.target.value)}
-                    className={`${formInput} ${errors.incorporadoraCnpj ? 'border-red-500' : ''}`}
-                    placeholder="00.000.000/0000-00"
-                  />
-                  {errors.incorporadoraCnpj && <p className="text-red-500 text-sm mt-1">{errors.incorporadoraCnpj}</p>}
-                </div>
+
+          {/* Responsáveis */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Responsáveis</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável Técnico</label>
+                <input
+                  type="text"
+                  value={formData.responsaveis.tecnico}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    responsaveis: {...formData.responsaveis, tecnico: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nome do engenheiro"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável Comercial</label>
+                <input
+                  type="text"
+                  value={formData.responsaveis.comercial}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    responsaveis: {...formData.responsaveis, comercial: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nome do corretor"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Responsável Jurídico</label>
+                <input
+                  type="text"
+                  value={formData.responsaveis.juridico}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    responsaveis: {...formData.responsaveis, juridico: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nome do advogado"
+                />
               </div>
             </div>
+          </div>
 
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Construtora</h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.construtora.nome}
-                    onChange={(e) => updateField('construtora.nome', e.target.value)}
-                    className={`${formInput} ${errors.construtoranome ? 'border-red-500' : ''}`}
-                    placeholder="Nome da construtora"
-                  />
-                  {errors.construtoranome && <p className="text-red-500 text-sm mt-1">{errors.construtoranome}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CNPJ *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.construtora.cnpj}
-                    onChange={(e) => updateField('construtora.cnpj', e.target.value)}
-                    className={`${formInput} ${errors.construtoracnpj ? 'border-red-500' : ''}`}
-                    placeholder="00.000.000/0000-00"
-                  />
-                  {errors.construtoracnpj && <p className="text-red-500 text-sm mt-1">{errors.construtoracnpj}</p>}
-                </div>
+          {/* Cronograma */}
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Cronograma</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data de Início</label>
+                <input
+                  type="date"
+                  value={formData.dataInicio}
+                  onChange={(e) => setFormData({...formData, dataInicio: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Prevista de Entrega</label>
+                <input
+                  type="date"
+                  value={formData.dataPrevista}
+                  onChange={(e) => setFormData({...formData, dataPrevista: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Cronograma */}
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cronograma</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data de Início *
-              </label>
-              <input
-                type="date"
-                value={formData.datas.inicio}
-                onChange={(e) => updateField('datas.inicio', e.target.value)}
-                className={`${formInput} ${errors.dataInicio ? 'border-red-500' : ''}`}
-              />
-              {errors.dataInicio && <p className="text-red-500 text-sm mt-1">{errors.dataInicio}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Previsão de Término *
-              </label>
-              <input
-                type="date"
-                value={formData.datas.previsaoTermino}
-                onChange={(e) => updateField('datas.previsaoTermino', e.target.value)}
-                className={`${formInput} ${errors.dataTermino ? 'border-red-500' : ''}`}
-              />
-              {errors.dataTermino && <p className="text-red-500 text-sm mt-1">{errors.dataTermino}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data de Entrega
-              </label>
-              <input
-                type="date"
-                value={formData.datas.dataEntrega}
-                onChange={(e) => updateField('datas.dataEntrega', e.target.value)}
-                className={formInput}
-              />
-              <p className="text-xs text-gray-500 mt-1">Opcional - preencher quando concluído</p>
-            </div>
+          {/* Botões de Ação */}
+          <div className="flex justify-end gap-4 pt-6 border-t">
+            <button
+              type="button"
+              onClick={() => navigate('/empreendimentos')}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Cadastrar Empreendimento
+            </button>
           </div>
-        </div>
-
-        {/* Informações Comerciais */}
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Informações Comerciais</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Valor Médio por Unidade *
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="1000"
-                value={formData.valorMedio}
-                onChange={(e) => updateField('valorMedio', Number(e.target.value))}
-                className={`${formInput} ${errors.valorMedio ? 'border-red-500' : ''}`}
-                placeholder="450000"
-              />
-              {errors.valorMedio && <p className="text-red-500 text-sm mt-1">{errors.valorMedio}</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* Botões de Ação */}
-        <div className="flex items-center justify-end space-x-3 pt-6">
-          <button
-            type="button"
-            onClick={() => navigate('/empreendimentos/construtora')}
-            className={buttonOutline}
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className={buttonPrimary}
-            disabled={loading}
-          >
-            {loading ? 'Salvando...' : (isEditing ? 'Atualizar' : 'Cadastrar')}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-// Página de Detalhes do Empreendimento
-function EmpreendimentoDetails() {
-  const navigate = useNavigate();
-  const { id } = useParams();
-  
-  // Encontrar o empreendimento
-  const empreendimento = mockEmpreendimentos.find(e => e.id === id);
-  
-  if (!empreendimento) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center py-12">
-          <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Empreendimento não encontrado</h3>
-          <p className="mt-1 text-sm text-gray-500">O empreendimento solicitado não existe.</p>
-          <button 
-            onClick={() => navigate('/empreendimentos/construtora')}
-            className={`${buttonPrimary} mt-4`}
-          >
-            Voltar à Lista
-          </button>
         </div>
       </div>
     );
   }
 
-  const progresso = ((empreendimento.unidadesVendidas + empreendimento.unidadesReservadas) / empreendimento.totalUnidades) * 100;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{empreendimento.nome}</h1>
-          <p className="text-gray-600">Informações completas e histórico</p>
+  // Página de Detalhes - VERSÃO CORRIGIDA
+  function DetalhesEmpreendimento() {
+    const [abaAtiva, setAbaAtiva] = useState<string>('informacoes');
+    
+    // Simular ID do empreendimento (na implementação real viria da URL)
+    const empreendimentoId = '1';
+    
+    // Encontrar o empreendimento
+    const empreendimento = mockEmpreendimentos.find(e => e.id === empreendimentoId);
+    
+    if (!empreendimento) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-gray-900">Empreendimento não encontrado</h2>
+            <button 
+              onClick={() => navigate('/empreendimentos')}
+              className="mt-4 text-blue-600 hover:text-blue-800"
+            >
+              Voltar para lista
+            </button>
+          </div>
         </div>
-        <div className="flex space-x-3">
-          <button 
-            onClick={() => navigate(`/empreendimentos/construtora/${id}/mapa`)}
-            className={buttonPrimary}
+      );
+    }
+
+    const abas = [
+      { id: 'informacoes', nome: 'Informações', icone: Info },
+      { id: 'mapa', nome: 'Mapa de Disponibilidade', icone: Map },
+      { id: 'documentos', nome: 'Documentos', icone: FileText },
+      { id: 'fotos', nome: 'Fotos', icone: Image }
+    ];
+
+    return (
+      <div className="max-w-7xl mx-auto">
+        {/* Header com foto de capa */}
+        <div className="relative h-64 bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg overflow-hidden mb-6">
+          <img 
+            src={empreendimento.imagem} 
+            alt={empreendimento.nome}
+            className="w-full h-full object-cover opacity-50"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute bottom-6 left-6 text-white">
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => navigate('/empreendimentos')}
+                className="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                empreendimento.status === 'vendas' ? 'bg-green-500' :
+                empreendimento.status === 'construcao' ? 'bg-blue-500' :
+                empreendimento.status === 'planejamento' ? 'bg-yellow-500' :
+                'bg-gray-500'
+              }`}>
+                {empreendimento.status === 'vendas' ? 'Em Vendas' :
+                 empreendimento.status === 'construcao' ? 'Em Construção' :
+                 empreendimento.status === 'planejamento' ? 'Planejamento' :
+                 'Concluído'}
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold mb-2">{empreendimento.nome}</h1>
+            <div className="flex items-center gap-4 text-sm opacity-90">
+              <div className="flex items-center gap-1">
+                <MapPin className="w-4 h-4" />
+                {empreendimento.localizacao.cidade}, {empreendimento.localizacao.estado}
+              </div>
+              <div className="flex items-center gap-1">
+                <Building className="w-4 h-4" />
+                {empreendimento.tipo}
+              </div>
+            </div>
+          </div>
+          
+          {/* Botão de edição */}
+          <button
+            onClick={() => navigate(`/empreendimentos/editar/${empreendimentoId}`)}
+            className="absolute top-6 right-6 p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors text-white"
           >
-            <Square3Stack3DIcon className="h-5 w-5 mr-2" />
-            Ver Mapa
+            <Edit2 className="w-5 h-5" />
           </button>
-          <button 
-            onClick={() => navigate(`/empreendimentos/construtora/${id}/editar`)}
-            className={buttonOutline}
-          >
-            <PencilIcon className="h-5 w-5 mr-2" />
-            Editar
-          </button>
-          <button 
-            onClick={() => navigate('/empreendimentos/construtora')} 
-            className={buttonOutline}
-          >
-            Voltar
-          </button>
+        </div>
+
+        {/* Navegação por abas */}
+        <div className="bg-white rounded-lg shadow-sm border mb-6">
+          <div className="flex overflow-x-auto">
+            {abas.map((aba) => {
+              const IconeAba = aba.icone;
+              return (
+                <button
+                  key={aba.id}
+                  onClick={() => setAbaAtiva(aba.id)}
+                  className={`flex items-center gap-2 px-6 py-4 border-b-2 whitespace-nowrap transition-colors ${
+                    abaAtiva === aba.id
+                      ? 'border-blue-500 text-blue-600 bg-blue-50'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <IconeAba className="w-5 h-5" />
+                  {aba.nome}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Conteúdo das abas */}
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          {abaAtiva === 'informacoes' && <AbaInformacoes empreendimento={empreendimento} />}
+          {abaAtiva === 'mapa' && <AbaMapaDisponibilidade />}
+          {abaAtiva === 'documentos' && <AbaDocumentos />}
+          {abaAtiva === 'fotos' && <AbaFotos />}
         </div>
       </div>
+    );
+  }
 
-      {/* Status e Informações Básicas */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={`${card} p-6 lg:col-span-2`}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Informações Gerais</h3>
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-              empreendimento.status === 'lancamento' ? 'bg-blue-100 text-blue-800' :
-              empreendimento.status === 'em_obras' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-            }`}>
-              {empreendimento.status === 'lancamento' ? 'Lançamento' :
-               empreendimento.status === 'em_obras' ? 'Em Obras' : 'Pronto'}
-            </span>
+  // Componente: Aba Informações
+  function AbaInformacoes({ empreendimento }: { empreendimento: Empreendimento }) {
+    const progresso = ((empreendimento.unidadesVendidas + empreendimento.unidadesReservadas) / empreendimento.unidadesTotal) * 100;
+    
+    return (
+      <div className="space-y-8">
+        {/* Estatísticas principais */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-blue-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium">Total de Unidades</p>
+                <p className="text-2xl font-bold text-blue-900">{empreendimento.unidadesTotal}</p>
+              </div>
+              <Home className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Vendidas</p>
+                <p className="text-2xl font-bold text-green-900">{empreendimento.unidadesVendidas}</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600 font-medium">Reservadas</p>
+                <p className="text-2xl font-bold text-yellow-900">{empreendimento.unidadesReservadas}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-600" />
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Disponíveis</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {empreendimento.unidadesTotal - empreendimento.unidadesVendidas - empreendimento.unidadesReservadas}
+                </p>
+              </div>
+              <Calendar className="w-8 h-8 text-gray-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Barra de progresso */}
+        <div className="bg-gray-50 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold text-gray-900">Progresso de Vendas</h3>
+            <span className="text-2xl font-bold text-blue-600">{progresso.toFixed(1)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-4">
+            <div 
+              className="bg-gradient-to-r from-blue-500 to-green-500 h-4 rounded-full transition-all duration-300"
+              style={{ width: `${progresso}%` }}
+            ></div>
+          </div>
+          <div className="flex justify-between mt-2 text-sm text-gray-600">
+            <span>0 unidades</span>
+            <span>{empreendimento.unidadesTotal} unidades</span>
+          </div>
+        </div>
+
+        {/* Informações detalhadas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Descrição */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Descrição do Empreendimento</h3>
+            <div className="prose text-gray-600">
+              <p>{empreendimento.descricao || 'Descrição não informada.'}</p>
+            </div>
+            
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-5 h-5 text-gray-400" />
+                <span className="text-gray-600">{empreendimento.localizacao.endereco}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Building className="w-5 h-5 text-gray-400" />
+                <span className="text-gray-600 capitalize">{empreendimento.tipo}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-gray-400" />
+                <span className="text-gray-600">Início: {empreendimento.dataInicio || 'Não informado'}</span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Responsáveis e tipos de unidades */}
+          <div className="space-y-6">
             <div>
-              <h4 className="font-medium text-gray-900 mb-2">Descrição</h4>
-              <p className="text-gray-600 text-sm leading-relaxed">{empreendimento.descricao}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Localização</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center">
-                    <MapPinIcon className="h-4 w-4 text-gray-400 mr-2" />
-                    <span>{empreendimento.localizacao.endereco}</span>
-                  </div>
-                  <div className="pl-6">
-                    <p>{empreendimento.localizacao.bairro}, {empreendimento.localizacao.cidade}/{empreendimento.localizacao.estado}</p>
-                    <p>CEP: {empreendimento.localizacao.cep}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Características</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Tipo:</span>
-                    <span className="capitalize">{empreendimento.tipo}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Total de Unidades:</span>
-                    <span className="font-semibold">{empreendimento.totalUnidades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Valor Médio:</span>
-                    <span className="font-semibold text-green-600">{formatCurrency(empreendimento.valorMedio)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Blocos/Torres:</span>
-                    <span className="font-semibold">{empreendimento.blocos.length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Incorporadora</h4>
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium">{empreendimento.incorporadora.nome}</p>
-                  <p className="text-gray-500">CNPJ: {empreendimento.incorporadora.cnpj}</p>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Construtora</h4>
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium">{empreendimento.construtora.nome}</p>
-                  <p className="text-gray-500">CNPJ: {empreendimento.construtora.cnpj}</p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Cronograma</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Início:</span>
-                  <p className="font-medium">{formatDate(empreendimento.datas.inicio)}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Previsão Término:</span>
-                  <p className="font-medium text-orange-600">{formatDate(empreendimento.datas.previsaoTermino)}</p>
-                </div>
-                {empreendimento.datas.dataEntrega && (
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Responsáveis</h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <div>
-                    <span className="text-gray-500">Data Entrega:</span>
-                    <p className="font-medium text-green-600">{formatDate(empreendimento.datas.dataEntrega)}</p>
+                    <span className="text-sm text-gray-500">Técnico:</span>
+                    <span className="ml-2 text-gray-900">{empreendimento.responsaveis?.tecnico || 'Não informado'}</span>
                   </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div>
+                    <span className="text-sm text-gray-500">Comercial:</span>
+                    <span className="ml-2 text-gray-900">{empreendimento.responsaveis?.comercial || 'Não informado'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                  <div>
+                    <span className="text-sm text-gray-500">Jurídico:</span>
+                    <span className="ml-2 text-gray-900">{empreendimento.responsaveis?.juridico || 'Não informado'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Tipos de Unidades</h3>
+              <div className="space-y-3">
+                {empreendimento.tiposUnidade?.map((tipo, index) => (
+                  <div key={index} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-medium text-gray-900">{tipo.nome}</h4>
+                      <span className="text-sm text-blue-600 font-medium">{tipo.preco}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                      <div>Tipologia: {tipo.tipologia}</div>
+                      <div>Área: {tipo.areaPrivativa}</div>
+                      <div>Vagas: {tipo.vagasGaragem}</div>
+                      <div>Unidades: {tipo.quantidade}</div>
+                    </div>
+                  </div>
+                )) || (
+                  <p className="text-gray-500 text-sm">Nenhum tipo de unidade cadastrado.</p>
                 )}
               </div>
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className={`${card} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Progresso de Vendas</h3>
-          <div className="text-center mb-4">
-            <div className="text-3xl font-bold text-blue-600">{progresso.toFixed(1)}%</div>
-            <div className="text-sm text-gray-500">Unidades Comercializadas</div>
+  // Componente: Aba Mapa de Disponibilidade
+  function AbaMapaDisponibilidade() {
+    const [unidadeSelecionada, setUnidadeSelecionada] = useState<any>(null);
+    
+    return (
+      <div className="space-y-6">
+        {/* Legenda */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Legenda</h3>
+          <div className="flex flex-wrap gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded"></div>
+              <span className="text-sm text-gray-700">Disponível</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+              <span className="text-sm text-gray-700">Reservado</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded"></div>
+              <span className="text-sm text-gray-700">Vendido</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-gray-800 rounded"></div>
+              <span className="text-sm text-gray-700">Indisponível</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mapa de Unidades */}
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Distribuição das Unidades</h3>
+          
+          <div className="space-y-4">
+            {Array.from({ length: 10 }, (_, andar) => {
+              const numeroAndar = 10 - andar;
+              return (
+                <div key={numeroAndar} className="flex items-center gap-4">
+                  <div className="w-12 text-center text-sm font-medium text-gray-600">
+                    {numeroAndar}º
+                  </div>
+                  <div className="flex gap-2">
+                    {Array.from({ length: 4 }, (_, apto) => {
+                      const numeroApto = numeroAndar * 100 + (apto + 1);
+                      const status = Math.random() > 0.7 ? 'vendido' : 
+                                   Math.random() > 0.5 ? 'reservado' : 
+                                   Math.random() > 0.9 ? 'indisponivel' : 'disponivel';
+                      
+                      const cores = {
+                        disponivel: 'bg-green-500 hover:bg-green-600',
+                        reservado: 'bg-yellow-500 hover:bg-yellow-600',
+                        vendido: 'bg-red-500 hover:bg-red-600',
+                        indisponivel: 'bg-gray-800 hover:bg-gray-900'
+                      };
+                      
+                      return (
+                        <button
+                          key={numeroApto}
+                          onClick={() => setUnidadeSelecionada({
+                            numero: numeroApto,
+                            status: status,
+                            tipo: 'Tipo 1',
+                            area: '65m²',
+                            vagas: 1,
+                            preco: 'R$ 350.000'
+                          })}
+                          className={`w-12 h-12 ${cores[status]} text-white text-xs font-medium rounded transition-colors flex items-center justify-center`}
+                          title={`Apto ${numeroApto} - ${status}`}
+                        >
+                          {apto + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-            <div
-              className="bg-blue-600 h-3 rounded-full"
-              style={{ width: `${progresso}%` }}
-            ></div>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Vendidas:</span>
-              <span className="font-semibold text-blue-600">{empreendimento.unidadesVendidas}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Reservadas:</span>
-              <span className="font-semibold text-yellow-600">{empreendimento.unidadesReservadas}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Disponíveis:</span>
-              <span className="font-semibold text-green-600">{empreendimento.unidadesDisponiveis}</span>
-            </div>
+          <div className="mt-6 text-center text-gray-500 text-sm">
+            <p>Clique nas unidades para ver mais detalhes</p>
           </div>
         </div>
-      </div>
 
-      {/* Tipos de Unidades */}
-      <div className={`${card} p-6`}>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Tipos de Unidades</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {empreendimento.blocos.map((bloco) => (
-            <div key={bloco.id} className="space-y-4">
-              <div className="border-l-4 border-blue-500 pl-4">
-                <h4 className="font-semibold text-gray-900">{bloco.nome}</h4>
-                <p className="text-sm text-gray-500">{bloco.totalAndares} andares • {bloco.unidadesPorAndar} unidades/andar</p>
-              </div>
-              
-              <div className="space-y-3">
-                {bloco.tipos.map((tipo) => (
-                  <div key={tipo.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h5 className="font-medium text-gray-900">{tipo.nome}</h5>
-                        <p className="text-sm text-gray-500">{tipo.tipologia}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-green-600">{formatCurrency(tipo.valor)}</span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                      <div>
-                        <span className="text-gray-500">Área Privativa:</span>
-                        <p className="font-medium">{tipo.areaPrivativa}m²</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Área Total:</span>
-                        <p className="font-medium">{tipo.areaTotalReal}m²</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Vagas:</span>
-                        <p className="font-medium">{tipo.vagas}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Quantidade:</span>
-                        <p className="font-medium">{tipo.quantidade} un.</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Documentos */}
-      <div className={`${card} p-6`}>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Documentos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {empreendimento.documentos.map((doc) => (
-            <div key={doc.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
-              <DocumentArrowUpIcon className="h-8 w-8 text-gray-400 mr-3" />
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{doc.nome}</p>
-                <p className="text-sm text-gray-500 capitalize">{doc.tipo.replace('_', ' ')}</p>
-                <p className="text-xs text-gray-400">{formatDate(doc.dataUpload)}</p>
-              </div>
-              <button className="ml-auto text-blue-600 hover:text-blue-800">
-                <EyeIcon className="h-4 w-4" />
+        {/* Modal da unidade selecionada */}
+        {unidadeSelecionada && (
+          <div className="bg-white border rounded-lg p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Unidade {unidadeSelecionada.numero}
+              </h3>
+              <button
+                onClick={() => setUnidadeSelecionada(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <span className="text-sm text-gray-500">Status:</span>
+                <p className="font-medium capitalize">{unidadeSelecionada.status}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">Tipo:</span>
+                <p className="font-medium">{unidadeSelecionada.tipo}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">Área:</span>
+                <p className="font-medium">{unidadeSelecionada.area}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">Preço:</span>
+                <p className="font-medium text-green-600">{unidadeSelecionada.preco}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Componente: Aba Documentos
+  function AbaDocumentos() {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Documentos do Empreendimento</h3>
+            <p className="text-gray-600 mt-1">Gerencie toda a documentação técnica e jurídica</p>
+          </div>
+          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Upload className="w-4 h-4" />
+            Enviar Documento
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { nome: 'Alvará de Construção', tipo: 'PDF', categoria: 'Licenças' },
+            { nome: 'Memorial Descritivo', tipo: 'PDF', categoria: 'Técnico' },
+            { nome: 'Matrícula do Terreno', tipo: 'PDF', categoria: 'Jurídico' }
+          ].map((doc, index) => (
+            <div key={index} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-red-500" />
+                  <div className="flex-1">
+                    <h5 className="font-medium text-gray-900 text-sm leading-tight">{doc.nome}</h5>
+                    <p className="text-xs text-gray-500 mt-1">{doc.tipo} • {doc.categoria}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button className="p-1 text-gray-400 hover:text-green-600 transition-colors">
+                    <Download className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
+    );
+  }
 
-      {/* Fotos */}
-      <div className={`${card} p-6`}>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Fotos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {empreendimento.fotos.map((foto) => (
-            <div key={foto.id} className="group relative">
-              <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <DocumentArrowUpIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-900">{foto.nome}</p>
-                  <p className="text-xs text-gray-500 capitalize">{foto.categoria.replace('_', ' ')}</p>
-                </div>
+  // Componente: Aba Fotos
+  function AbaFotos() {
+    const fotos = [
+      { id: 1, url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400', categoria: 'Fachada', titulo: 'Vista Principal' },
+      { id: 2, url: 'https://images.unsplash.com/photo-1574362848149-11496d93a7c7?w=400', categoria: 'Apartamentos', titulo: 'Apartamento Decorado' },
+      { id: 3, url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400', categoria: 'Lazer', titulo: 'Piscina' }
+    ];
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Galeria de Fotos</h3>
+            <p className="text-gray-600 mt-1">Explore as imagens do empreendimento</p>
+          </div>
+          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Upload className="w-4 h-4" />
+            Enviar Fotos
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {fotos.map(foto => (
+            <div key={foto.id} className="group relative bg-white rounded-lg overflow-hidden shadow-sm border hover:shadow-md transition-shadow">
+              <div className="aspect-square overflow-hidden">
+                <img
+                  src={foto.url}
+                  alt={foto.titulo}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-lg transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <button className="text-white bg-blue-600 rounded-full p-2 hover:bg-blue-700">
-                  <EyeIcon className="h-5 w-5" />
+              
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-blue-600 font-medium">{foto.categoria}</span>
+                </div>
+                <h4 className="text-sm font-medium text-gray-900 truncate">{foto.titulo}</h4>
+              </div>
+              
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <button className="p-2 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors">
+                  <Eye className="w-5 h-5" />
                 </button>
               </div>
             </div>
           ))}
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-// Placeholder para páginas em desenvolvimento
-function PlaceholderPage({ title, subtitle, icon: Icon }: { title: string; subtitle: string; icon: any }) {
-  const navigate = useNavigate();
-  
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-          <p className="text-gray-600">{subtitle}</p>
+  // Mapa de Disponibilidade Dedicado
+  function MapaDisponibilidade() {
+    const empreendimentoId = '1';
+    const empreendimento = mockEmpreendimentos.find(e => e.id === empreendimentoId);
+    
+    if (!empreendimento) {
+      return (
+        <div className="space-y-6">
+          <div className="text-center py-12">
+            <Building className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Empreendimento não encontrado</h3>
+            <p className="mt-1 text-sm text-gray-500">O empreendimento solicitado não existe.</p>
+            <button 
+              onClick={() => navigate('/empreendimentos')}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Voltar à Lista
+            </button>
+          </div>
         </div>
-        <button onClick={() => navigate('/empreendimentos')} className={buttonOutline}>
-          Voltar
-        </button>
-      </div>
-      <div className={`${card} p-6`}>
-        <div className="text-center py-12">
-          <Icon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Em Desenvolvimento</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Esta funcionalidade será implementada em breve.
-          </p>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Mapa de Disponibilidade</h1>
+            <p className="text-gray-600">{empreendimento.nome}</p>
+          </div>
+          <div className="flex space-x-3">
+            <button 
+              onClick={() => navigate(`/empreendimentos/detalhes/${empreendimentoId}`)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Ver Detalhes
+            </button>
+            <button 
+              onClick={() => navigate('/empreendimentos')} 
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <AbaMapaDisponibilidade />
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-// ============================
-// MAIN COMPONENT
-// ============================
-
-function Empreendimentos() {
+  // Router principal
   return (
-    <Routes>
-      <Route index element={<EmpreendimentosOverview />} />
-      <Route path="construtora" element={<EmpreendimentosConstrutora />} />
-      <Route path="terceiros" element={<PlaceholderPage title="Imóveis de Terceiros" subtitle="Captação e gestão de imóveis externos" icon={HomeIcon} />} />
-      <Route path="aluguel" element={<PlaceholderPage title="Imóveis para Aluguel" subtitle="Gestão de contratos de locação" icon={KeyIcon} />} />
-      <Route path="construtora/novo" element={<EmpreendimentoForm />} />
-      <Route path="construtora/:id/editar" element={<EmpreendimentoForm />} />
-      <Route path="construtora/:id" element={<EmpreendimentoDetails />} />
-      <Route path="construtora/:id/mapa" element={<PlaceholderPage title="Mapa de Disponibilidade" subtitle="Visualização inteligente das unidades" icon={Square3Stack3DIcon} />} />
-      <Route path="terceiros/novo" element={<PlaceholderPage title="Cadastro de Imóvel de Terceiro" subtitle="Captação externa com comissão" icon={HomeIcon} />} />
-      <Route path="aluguel/novo" element={<PlaceholderPage title="Cadastro de Imóvel para Aluguel" subtitle="Gestão de locação e contratos" icon={KeyIcon} />} />
-    </Routes>
+    <div className="min-h-screen bg-gray-50 p-6">
+      {currentView === 'lista' && <ListaEmpreendimentos />}
+      {currentView === 'formulario' && <FormularioEmpreendimento />}
+      {currentView === 'detalhes' && <DetalhesEmpreendimento />}
+      {currentView === 'mapa' && <MapaDisponibilidade />}
+    </div>
   );
 }
 
