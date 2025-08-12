@@ -1,12 +1,28 @@
-import React, { useState, useEffect, useMemo, useCallback, createContext, useContext, useReducer } from 'react';
+import React, {
+  useMemo, useReducer, useState, useCallback, createContext, useContext, useEffect, useRef,
+} from "react";
 import {
   Users, Target, Phone, Mail, MessageSquare, Eye, Edit2, Plus, X, Search,
-  DollarSign, Calendar, Clock, Building, MapPin, Tag, User, Star, Filter,
-  AlertTriangle, CheckCircle, TrendingUp, MoreVertical, Download, RefreshCw,
-  ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Activity, Award, Zap
-} from 'lucide-react';
+  DollarSign, Filter, BarChart3, Columns as KanbanIcon, List as ListIcon,
+  Clock, CheckCircle, ChevronRight, Download, AlertTriangle, MoreVertical,
+  MessageCircle, LayoutGrid, PieChart, Paperclip, Send, ChevronDown,
+} from "lucide-react";
 
-// ==================== INTERFACES E TIPOS ====================
+/* =========================================================
+   Tipos
+========================================================= */
+
+type Origem = "site" | "indicacao" | "telemarketing" | "redes-sociais" | "evento" | "outros";
+type Status =
+  | "lead"
+  | "contato"
+  | "interessado"
+  | "negociacao"
+  | "proposta"
+  | "vendido"
+  | "perdido";
+type Prioridade = "baixa" | "media" | "alta";
+type Temperatura = "frio" | "morno" | "quente";
 
 interface Cliente {
   id: string;
@@ -14,665 +30,781 @@ interface Cliente {
   email: string;
   telefone: string;
   whatsapp?: string;
-  origem: 'site' | 'indicacao' | 'telemarketing' | 'redes-sociais' | 'evento' | 'outros';
-  status: 'lead' | 'contato' | 'interessado' | 'negociacao' | 'proposta' | 'vendido' | 'perdido';
-  prioridade: 'baixa' | 'media' | 'alta';
+  origem: Origem;
+  status: Status;
+  prioridade: Prioridade;
   valorOrcamento?: number;
   observacoes?: string;
   responsavel: string;
-  dataCriacao: string;
-  ultimoContato?: string;
-  proximoFollowUp?: string;
+  dataCriacao: string;       // YYYY-MM-DD
+  ultimoContato?: string;    // ISO
+  proximoFollowUp?: string;  // ISO
   empreendimentoInteresse?: string;
   tags?: string[];
   score?: number;
-  temperatura: 'frio' | 'morno' | 'quente';
+  temperatura: Temperatura;
   tempoResposta?: number;
   numeroContatos?: number;
   cidade?: string;
+  alertaSLA?: boolean;       // calculado
+  avatarUrl?: string;
 }
+
+type TipoAtividade = "ligacao" | "email" | "whatsapp" | "reuniao" | "visita" | "proposta" | "follow-up" | "nota";
+type StatusAtividade = "agendado" | "concluido" | "cancelado" | "em-andamento";
 
 interface Atividade {
   id: string;
   clienteId: string;
-  tipo: 'ligacao' | 'email' | 'whatsapp' | 'reuniao' | 'visita' | 'proposta' | 'follow-up' | 'nota';
+  tipo: TipoAtividade;
   descricao: string;
-  data: string;
+  data: string; // ISO
   responsavel: string;
-  status: 'agendado' | 'concluido' | 'cancelado' | 'em-andamento';
-  observacoes?: string;
-  duracao?: number;
-  resultado?: 'positivo' | 'neutro' | 'negativo';
-  proximaAcao?: string;
-  dataProximaAcao?: string;
-  prioridade?: 'baixa' | 'media' | 'alta';
+  status: StatusAtividade;
+  duracaoMinutos?: number;
+}
+
+interface Mensagem {
+  id: string;
+  clienteId: string;
+  autor: "lead" | "agente";
+  canal: "whatsapp" | "email" | "ligacao" | "nota";
+  texto: string;
+  data: string; // ISO
+  anexos?: { id: string; nome: string; url: string }[];
+  lido?: boolean;
 }
 
 interface FiltrosCRM {
   busca: string;
-  status: string;
-  origem: string;
+  status: "" | Status;
+  origem: "" | Origem;
   responsavel: string;
-  prioridade: string;
-  temperatura: string;
-  dataInicio: string;
-  dataFim: string;
-  valorMinimo: string;
-  valorMaximo: string;
-  empreendimento: string;
+  prioridade: "" | Prioridade;
+  temperatura: "" | Temperatura;
   cidade: string;
-  tags: string[];
 }
 
+interface MetasPipeline {
+  lead: number;
+  contato: number;
+  interessado: number;
+  negociacao: number;
+  proposta: number;
+  vendido: number;
+}
+
+type View = "chat" | "dashboard" | "pipeline";
+
+/* =========================================================
+   Estado global do CRM
+========================================================= */
 interface CRMState {
   clientes: Cliente[];
   atividades: Atividade[];
+  mensagens: Mensagem[];
   filtros: FiltrosCRM;
-  loading: boolean;
-  error: string | null;
   clienteSelecionado: Cliente | null;
   modalAtivo: string | null;
-  notificacoes: Array<{
-    id: string;
-    type: 'success' | 'error' | 'warning' | 'info';
-    title: string;
-    message: string;
-    timestamp: Date;
-    read: boolean;
-  }>;
+  view: View;
+  metas: MetasPipeline;
+  pipelineAtivo: string;       // nome/slug do pipeline atual
+  pipelines: Record<string, { id: string; nome: string; estagios: Status[] }>;
 }
 
-// ==================== DADOS MOCK ====================
+type Action =
+  | { type: "SET_VIEW"; payload: View }
+  | { type: "SET_FILTRO"; payload: Partial<FiltrosCRM> }
+  | { type: "OPEN_MODAL"; payload: CRMState["modalAtivo"] }
+  | { type: "CLOSE_MODAL" }
+  | { type: "SELECT_CLIENTE"; payload: Cliente | null }
+  | { type: "ADD_CLIENTE"; payload: Cliente }
+  | { type: "UPDATE_CLIENTE"; payload: Cliente }
+  | { type: "MOVE_STATUS"; payload: { id: string; status: Status } }
+  | { type: "ADD_ATIVIDADE"; payload: Atividade }
+  | { type: "BULK_ATIVIDADES"; payload: Atividade[] }
+  | { type: "ADD_MSG"; payload: Mensagem }
+  | { type: "BULK_MSGS"; payload: Mensagem[] }
+  | { type: "SET_METAS"; payload: MetasPipeline }
+  | { type: "SET_PIPELINE"; payload: string }
+  | { type: "UPSERT_PIPELINE"; payload: { id?: string; nome: string; estagios: Status[] } };
+
+/* =========================================================
+   Mocks
+========================================================= */
 
 const mockClientes: Cliente[] = [
   {
-    id: '1',
-    nome: 'Maria Silva Santos',
-    email: 'maria.silva@email.com',
-    telefone: '(48) 99999-1234',
-    whatsapp: '48999991234',
-    origem: 'site',
-    status: 'interessado',
-    prioridade: 'alta',
+    id: "1",
+    nome: "Maria Silva Santos",
+    email: "maria.silva@email.com",
+    telefone: "(48) 99999-1234",
+    whatsapp: "48999991234",
+    origem: "site",
+    status: "interessado",
+    prioridade: "alta",
     valorOrcamento: 450000,
-    responsavel: 'João Corretor',
-    dataCriacao: '2025-01-15',
-    ultimoContato: '2025-01-28',
-    proximoFollowUp: '2025-01-31',
-    empreendimentoInteresse: 'Residencial Solar das Flores',
-    tags: ['qualificado', 'urgente', 'financiamento-aprovado'],
+    responsavel: "João Corretor",
+    dataCriacao: "2025-01-15",
+    ultimoContato: "2025-01-28T14:30:00",
+    proximoFollowUp: "2025-01-31T10:00:00",
+    empreendimentoInteresse: "Residencial Solar das Flores",
+    tags: ["qualificado", "urgente", "financiamento-aprovado"],
     score: 85,
-    temperatura: 'quente',
+    temperatura: "quente",
     tempoResposta: 2,
     numeroContatos: 5,
-    cidade: 'Florianópolis'
+    cidade: "Florianópolis",
   },
   {
-    id: '2',
-    nome: 'Carlos Eduardo Lima',
-    email: 'carlos.lima@empresa.com',
-    telefone: '(48) 98888-5678',
-    whatsapp: '48988885678',
-    origem: 'indicacao',
-    status: 'negociacao',
-    prioridade: 'alta',
+    id: "2",
+    nome: "Carlos Eduardo Lima",
+    email: "carlos.lima@empresa.com",
+    telefone: "(48) 98888-5678",
+    whatsapp: "48988885678",
+    origem: "indicacao",
+    status: "negociacao",
+    prioridade: "alta",
     valorOrcamento: 680000,
-    responsavel: 'Ana Corretora',
-    dataCriacao: '2025-01-10',
-    ultimoContato: '2025-01-29',
-    proximoFollowUp: '2025-02-01',
-    empreendimentoInteresse: 'Comercial Business Center',
-    tags: ['investidor', 'decisor', 'alta-renda'],
+    responsavel: "Ana Corretora",
+    dataCriacao: "2025-01-10",
+    ultimoContato: "2025-01-29T09:00:00",
+    proximoFollowUp: "2025-02-01T11:00:00",
+    empreendimentoInteresse: "Comercial Business Center",
+    tags: ["investidor", "decisor", "alta-renda"],
     score: 92,
-    temperatura: 'quente',
+    temperatura: "quente",
     tempoResposta: 1,
     numeroContatos: 8,
-    cidade: 'Florianópolis'
+    cidade: "Florianópolis",
   },
   {
-    id: '3',
-    nome: 'Pedro Santos Oliveira',
-    email: 'pedro.oliveira@gmail.com',
-    telefone: '(48) 97777-9012',
-    origem: 'redes-sociais',
-    status: 'lead',
-    prioridade: 'media',
-    responsavel: 'Maria Corretora',
-    dataCriacao: '2025-01-25',
-    ultimoContato: '2025-01-26',
-    proximoFollowUp: '2025-01-30',
-    tags: ['novo', 'primeira-conversa'],
+    id: "3",
+    nome: "Pedro Santos Oliveira",
+    email: "pedro.oliveira@gmail.com",
+    telefone: "(48) 97777-9012",
+    origem: "redes-sociais",
+    status: "lead",
+    prioridade: "media",
+    responsavel: "Maria Corretora",
+    dataCriacao: "2025-01-25",
+    ultimoContato: "2025-01-26T08:00:00",
+    proximoFollowUp: "2025-01-30T15:00:00",
+    tags: ["novo", "primeira-conversa"],
     score: 45,
-    temperatura: 'morno',
+    temperatura: "morno",
     tempoResposta: 12,
     numeroContatos: 1,
-    cidade: 'São José'
+    cidade: "São José",
   },
-  {
-    id: '4',
-    nome: 'Ana Paula Costa',
-    email: 'anapaula@email.com',
-    telefone: '(48) 96666-3456',
-    whatsapp: '48966663456',
-    origem: 'telemarketing',
-    status: 'proposta',
-    prioridade: 'alta',
-    valorOrcamento: 320000,
-    responsavel: 'João Corretor',
-    dataCriacao: '2025-01-20',
-    ultimoContato: '2025-01-29',
-    proximoFollowUp: '2025-02-02',
-    empreendimentoInteresse: 'Residencial Solar das Flores',
-    tags: ['financiamento', 'primeira-casa', 'jovem'],
-    score: 78,
-    temperatura: 'quente',
-    tempoResposta: 3,
-    numeroContatos: 6,
-    cidade: 'Florianópolis'
-  },
-  {
-    id: '5',
-    nome: 'Roberto Ferreira',
-    email: 'roberto.ferreira@gmail.com',
-    telefone: '(48) 95555-7890',
-    origem: 'evento',
-    status: 'contato',
-    prioridade: 'media',
-    valorOrcamento: 280000,
-    responsavel: 'Ana Corretora',
-    dataCriacao: '2025-01-22',
-    ultimoContato: '2025-01-27',
-    proximoFollowUp: '2025-01-31',
-    empreendimentoInteresse: 'Residencial Jardim das Águas',
-    tags: ['primeira-compra', 'evento-feira'],
-    score: 62,
-    temperatura: 'morno',
-    tempoResposta: 6,
-    numeroContatos: 3,
-    cidade: 'São José'
-  },
-  {
-    id: '6',
-    nome: 'Fernanda Costa',
-    email: 'fernanda.costa@outlook.com',
-    telefone: '(48) 94444-5678',
-    whatsapp: '48944445678',
-    origem: 'site',
-    status: 'vendido',
-    prioridade: 'alta',
-    valorOrcamento: 550000,
-    responsavel: 'João Corretor',
-    dataCriacao: '2024-12-15',
-    ultimoContato: '2025-01-25',
-    empreendimentoInteresse: 'Residencial Solar das Flores',
-    tags: ['cliente-vip', 'concluido', 'indicadora'],
-    score: 95,
-    temperatura: 'quente',
-    tempoResposta: 1,
-    numeroContatos: 12,
-    cidade: 'Florianópolis'
-  }
 ];
 
 const mockAtividades: Atividade[] = [
   {
-    id: '1',
-    clienteId: '1',
-    tipo: 'ligacao',
-    descricao: 'Follow-up sobre interesse no apartamento tipo 2',
-    data: '2025-01-28T14:30:00',
-    responsavel: 'João Corretor',
-    status: 'concluido',
-    observacoes: 'Cliente confirmou interesse e agendou visita',
-    duracao: 15,
-    resultado: 'positivo',
-    proximaAcao: 'Agendar visita ao apartamento decorado',
-    dataProximaAcao: '2025-02-02',
-    prioridade: 'alta'
+    id: "a1",
+    clienteId: "1",
+    tipo: "ligacao",
+    descricao: "Follow-up sobre interesse",
+    data: "2025-01-28T14:30:00",
+    responsavel: "João Corretor",
+    status: "concluido",
+    duracaoMinutos: 15,
   },
   {
-    id: '2',
-    clienteId: '2',
-    tipo: 'reuniao',
-    descricao: 'Apresentação da proposta comercial',
-    data: '2025-02-01T10:00:00',
-    responsavel: 'Ana Corretora',
-    status: 'agendado',
-    observacoes: 'Preparar material completo sobre ROI',
-    duracao: 60,
-    prioridade: 'alta'
-  }
+    id: "a2",
+    clienteId: "1",
+    tipo: "follow-up",
+    descricao: "Agendar visita ao decorado",
+    data: "2025-02-02T10:00:00",
+    responsavel: "João Corretor",
+    status: "agendado",
+  },
 ];
 
-// ==================== CONTEXT E ESTADO ====================
+const mockMensagens: Mensagem[] = [
+  { id: "m1", clienteId: "1", autor: "lead", canal: "whatsapp", texto: "Olá! Tenho interesse no Solar das Flores.", data: "2025-01-28T14:35:00" },
+  { id: "m2", clienteId: "1", autor: "agente", canal: "whatsapp", texto: "Oi Maria! Posso te passar a planta e valores?", data: "2025-01-28T14:37:00" },
+  { id: "m3", clienteId: "2", autor: "lead", canal: "whatsapp", texto: "Tem vaga no Business Center este mês?", data: "2025-01-29T10:10:00" },
+];
 
-type CRMAction = 
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_CLIENTES'; payload: Cliente[] }
-  | { type: 'ADD_CLIENTE'; payload: Cliente }
-  | { type: 'UPDATE_CLIENTE'; payload: Cliente }
-  | { type: 'DELETE_CLIENTE'; payload: string }
-  | { type: 'SET_CLIENTE_SELECIONADO'; payload: Cliente | null }
-  | { type: 'SET_ATIVIDADES'; payload: Atividade[] }
-  | { type: 'ADD_ATIVIDADE'; payload: Atividade }
-  | { type: 'SET_FILTROS'; payload: Partial<FiltrosCRM> }
-  | { type: 'CLEAR_FILTROS' }
-  | { type: 'SET_MODAL_ATIVO'; payload: string | null }
-  | { type: 'ADD_NOTIFICACAO'; payload: Omit<CRMState['notificacoes'][0], 'id' | 'timestamp' | 'read'> };
-
-const initialFiltros: FiltrosCRM = {
-  busca: '',
-  status: '',
-  origem: '',
-  responsavel: '',
-  prioridade: '',
-  temperatura: '',
-  dataInicio: '',
-  dataFim: '',
-  valorMinimo: '',
-  valorMaximo: '',
-  empreendimento: '',
-  cidade: '',
-  tags: []
+const pipelinesDefaults: CRMState["pipelines"] = {
+  "comercial": { id: "comercial", nome: "Comercial (Padrão)", estagios: ["lead", "contato", "interessado", "negociacao", "proposta", "vendido", "perdido"] },
 };
+
+/* =========================================================
+   Utils
+========================================================= */
+const money = (v?: number) =>
+  typeof v === "number"
+    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v)
+    : "-";
+const dateBR = (s?: string) => (s ? new Date(s).toLocaleDateString("pt-BR") : "-");
+const timeBR = (s?: string) => (s ? new Date(s).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "");
+const initials = (nome: string) => nome.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
+const diffHours = (a: string, b: string) => Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 36e5);
+
+function emailValido(email: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function telefoneValido(fone: string) { return fone.replace(/\D/g, "").length >= 10; }
+
+function convertLeadToPessoa(c: Cliente) {
+  if (!emailValido(c.email) || !telefoneValido(c.telefone)) {
+    console.warn("[CRM] Conversão bloqueada: dados inválidos", c);
+    return false;
+  }
+  console.info("[CRM] Converter para Pessoa/Cliente:", {
+    tipo: "cliente",
+    nome: c.nome,
+    email: c.email,
+    telefone: c.telefone,
+    origem: c.origem,
+  });
+  return true;
+}
+
+/* =========================================================
+   Contexto
+========================================================= */
 
 const initialState: CRMState = {
   clientes: mockClientes,
   atividades: mockAtividades,
-  filtros: initialFiltros,
-  loading: false,
-  error: null,
-  clienteSelecionado: null,
+  mensagens: mockMensagens,
+  filtros: { busca: "", status: "", origem: "", responsavel: "", prioridade: "", temperatura: "", cidade: "" },
   modalAtivo: null,
-  notificacoes: []
+  clienteSelecionado: null,
+  view: "chat", // chat-first
+  metas: { lead: 20, contato: 15, interessado: 12, negociacao: 8, proposta: 6, vendido: 4 },
+  pipelineAtivo: "comercial",
+  pipelines: pipelinesDefaults,
 };
 
-function crmReducer(state: CRMState, action: CRMAction): CRMState {
+function reducer(state: CRMState, action: Action): CRMState {
   switch (action.type) {
-    case 'SET_LOADING':
-      return { ...state, loading: action.payload };
-    
-    case 'SET_ERROR':
-      return { ...state, error: action.payload, loading: false };
-    
-    case 'SET_CLIENTES':
-      return { ...state, clientes: action.payload, loading: false };
-    
-    case 'ADD_CLIENTE':
-      return { 
-        ...state, 
-        clientes: [...state.clientes, action.payload],
-        notificacoes: [
-          {
-            id: Date.now().toString(),
-            type: 'success',
-            title: 'Cliente Adicionado',
-            message: `${action.payload.nome} foi adicionado com sucesso`,
-            timestamp: new Date(),
-            read: false
-          },
-          ...state.notificacoes
-        ]
-      };
-    
-    case 'UPDATE_CLIENTE':
-      return {
-        ...state,
-        clientes: state.clientes.map(cliente => 
-          cliente.id === action.payload.id ? action.payload : cliente
-        ),
-        clienteSelecionado: state.clienteSelecionado?.id === action.payload.id 
-          ? action.payload 
-          : state.clienteSelecionado
-      };
-    
-    case 'DELETE_CLIENTE':
-      return {
-        ...state,
-        clientes: state.clientes.filter(cliente => cliente.id !== action.payload),
-        clienteSelecionado: state.clienteSelecionado?.id === action.payload 
-          ? null 
-          : state.clienteSelecionado
-      };
-    
-    case 'SET_CLIENTE_SELECIONADO':
-      return { ...state, clienteSelecionado: action.payload };
-    
-    case 'SET_ATIVIDADES':
-      return { ...state, atividades: action.payload };
-    
-    case 'ADD_ATIVIDADE':
-      return { 
-        ...state, 
-        atividades: [...state.atividades, action.payload]
-      };
-    
-    case 'SET_FILTROS':
-      return { 
-        ...state, 
-        filtros: { ...state.filtros, ...action.payload } 
-      };
-    
-    case 'CLEAR_FILTROS':
-      return { ...state, filtros: initialFiltros };
-    
-    case 'SET_MODAL_ATIVO':
+    case "SET_VIEW":
+      return { ...state, view: action.payload };
+    case "SET_FILTRO":
+      return { ...state, filtros: { ...state.filtros, ...action.payload } };
+    case "OPEN_MODAL":
       return { ...state, modalAtivo: action.payload };
-    
-    case 'ADD_NOTIFICACAO':
+    case "CLOSE_MODAL":
+      return { ...state, modalAtivo: null, clienteSelecionado: null };
+    case "SELECT_CLIENTE":
+      return { ...state, clienteSelecionado: action.payload };
+    case "ADD_CLIENTE":
+      return { ...state, clientes: [...state.clientes, action.payload] };
+    case "UPDATE_CLIENTE":
       return {
         ...state,
-        notificacoes: [
-          {
-            ...action.payload,
-            id: Date.now().toString(),
-            timestamp: new Date(),
-            read: false
-          },
-          ...state.notificacoes
-        ]
+        clientes: state.clientes.map((c) => (c.id === action.payload.id ? action.payload : c)),
+        clienteSelecionado:
+          state.clienteSelecionado && state.clienteSelecionado.id === action.payload.id
+            ? action.payload
+            : state.clienteSelecionado,
       };
-    
+    case "MOVE_STATUS": {
+      const updated = state.clientes.map((c) =>
+        c.id === action.payload.id ? { ...c, status: action.payload.status } : c
+      );
+      const moved = updated.find((c) => c.id === action.payload.id)!;
+      if (action.payload.status === "vendido") convertLeadToPessoa(moved);
+      return { ...state, clientes: updated };
+    }
+    case "ADD_ATIVIDADE":
+      return { ...state, atividades: [...state.atividades, action.payload] };
+    case "BULK_ATIVIDADES":
+      return { ...state, atividades: action.payload };
+    case "ADD_MSG":
+      return { ...state, mensagens: [...state.mensagens, action.payload] };
+    case "BULK_MSGS":
+      return { ...state, mensagens: action.payload };
+    case "SET_METAS":
+      return { ...state, metas: action.payload };
+    case "SET_PIPELINE":
+      return { ...state, pipelineAtivo: action.payload };
+    case "UPSERT_PIPELINE": {
+      const id = action.payload.id ?? action.payload.nome.toLowerCase().replace(/\s+/g, "-");
+      return {
+        ...state,
+        pipelines: {
+          ...state.pipelines,
+          [id]: { id, nome: action.payload.nome, estagios: action.payload.estagios },
+        },
+        pipelineAtivo: id,
+      };
+    }
     default:
       return state;
   }
 }
 
-const CRMContext = createContext<{
-  state: CRMState;
-  dispatch: React.Dispatch<CRMAction>;
-} | null>(null);
+const Ctx = createContext<{ state: CRMState; dispatch: React.Dispatch<Action> } | null>(null);
+const useCRM = () => {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useCRM deve ser usado dentro de CRMProvider");
+  return ctx;
+};
 
-function useCRM() {
-  const context = useContext(CRMContext);
-  if (!context) {
-    throw new Error('useCRM deve ser usado dentro de um CRMProvider');
-  }
-  return context;
-}
+function Provider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-// ==================== HOOKS UTILITÁRIOS ====================
+  // Gatilhos automáticos: SLA / temperatura
+  useEffect(() => {
+    const now = new Date().toISOString();
+    const updated = state.clientes.map((c) => {
+      const emSLA = ["lead", "contato"].includes(c.status);
+      const base = c.ultimoContato || c.dataCriacao + "T00:00:00";
+      const violouSLA = emSLA && diffHours(now, base) > 24;
 
-function useFormatters() {
-  const formatCurrency = useCallback((value: number): string => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  }, []);
+      const horas = diffHours(now, base);
+      let temp: Temperatura = c.temperatura;
+      if (horas <= 72) temp = "quente";
+      else if (horas <= 168) temp = "morno";
+      else temp = "frio";
 
-  const formatDate = useCallback((dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
+      return { ...c, alertaSLA: violouSLA, temperatura: temp };
     });
-  }, []);
 
-  const formatPhone = useCallback((phone: string): string => {
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length === 11) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+    if (JSON.stringify(updated) !== JSON.stringify(state.clientes)) {
+      updated.forEach((u) => dispatch({ type: "UPDATE_CLIENTE", payload: u }));
     }
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
-    }
-    return phone;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.clientes.length]);
 
-  return { formatCurrency, formatDate, formatPhone };
+  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
 }
 
-function useClienteFilter() {
+/* =========================================================
+   Hooks auxiliares
+========================================================= */
+
+function useClientesFiltrados() {
   const { state } = useCRM();
-  const { clientes, filtros } = state;
-
-  const clientesFiltrados = useMemo(() => {
-    return clientes.filter(cliente => {
-      const matchBusca = !filtros.busca || 
-        cliente.nome.toLowerCase().includes(filtros.busca.toLowerCase()) ||
-        cliente.email.toLowerCase().includes(filtros.busca.toLowerCase()) ||
-        cliente.telefone.includes(filtros.busca);
-      
-      const matchStatus = !filtros.status || cliente.status === filtros.status;
-      const matchOrigem = !filtros.origem || cliente.origem === filtros.origem;
-      const matchResponsavel = !filtros.responsavel || cliente.responsavel === filtros.responsavel;
-      const matchPrioridade = !filtros.prioridade || cliente.prioridade === filtros.prioridade;
-      const matchTemperatura = !filtros.temperatura || cliente.temperatura === filtros.temperatura;
-      const matchCidade = !filtros.cidade || cliente.cidade === filtros.cidade;
-      
-      const matchValor = (
-        (!filtros.valorMinimo || !cliente.valorOrcamento || 
-         cliente.valorOrcamento >= parseInt(filtros.valorMinimo)) &&
-        (!filtros.valorMaximo || !cliente.valorOrcamento || 
-         cliente.valorOrcamento <= parseInt(filtros.valorMaximo))
-      );
-      
-      const matchData = (
-        (!filtros.dataInicio || new Date(cliente.dataCriacao) >= new Date(filtros.dataInicio)) &&
-        (!filtros.dataFim || new Date(cliente.dataCriacao) <= new Date(filtros.dataFim))
-      );
-      
-      return matchBusca && matchStatus && matchOrigem && matchResponsavel && 
-             matchPrioridade && matchTemperatura && matchCidade && 
-             matchValor && matchData;
+  return useMemo(() => {
+    const f = state.filtros;
+    return state.clientes.filter((c) => {
+      const b =
+        !f.busca ||
+        c.nome.toLowerCase().includes(f.busca.toLowerCase()) ||
+        c.email.toLowerCase().includes(f.busca.toLowerCase()) ||
+        c.telefone.includes(f.busca);
+      const s = !f.status || c.status === f.status;
+      const o = !f.origem || c.origem === f.origem;
+      const r = !f.responsavel || c.responsavel.toLowerCase().includes(f.responsavel.toLowerCase());
+      return b && s && o && r;
     });
-  }, [clientes, filtros]);
-
-  const contadoresPorStatus = useMemo(() => {
-    return clientesFiltrados.reduce((acc, cliente) => {
-      acc[cliente.status] = (acc[cliente.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-  }, [clientesFiltrados]);
-
-  return {
-    clientesFiltrados,
-    contadoresPorStatus,
-    totalClientes: clientesFiltrados.length
-  };
+  }, [state.clientes, state.filtros]);
 }
 
-// ==================== COMPONENTES PRINCIPAIS ====================
+function useAtividades(clienteId?: string) {
+  const { state } = useCRM();
+  return useMemo(
+    () =>
+      state.atividades
+        .filter((a) => (clienteId ? a.clienteId === clienteId : true))
+        .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()),
+    [state.atividades, clienteId]
+  );
+}
 
-function DashboardMetricas() {
-  const { clientesFiltrados } = useClienteFilter();
-  const { formatCurrency } = useFormatters();
+function useMensagens(clienteId?: string) {
+  const { state } = useCRM();
+  return useMemo(
+    () =>
+      state.mensagens
+        .filter((m) => (clienteId ? m.clienteId === clienteId : true))
+        .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()),
+    [state.mensagens, clienteId]
+  );
+}
 
-  const metricas = useMemo(() => {
-    const total = clientesFiltrados.length;
-    const leads = clientesFiltrados.filter(c => c.status === 'lead').length;
-    const ativo = clientesFiltrados.filter(c => 
-      ['interessado', 'negociacao', 'proposta'].includes(c.status)
-    ).length;
-    const vendas = clientesFiltrados.filter(c => c.status === 'vendido').length;
-    const valorPipeline = clientesFiltrados
-      .filter(c => c.valorOrcamento && ['interessado', 'negociacao', 'proposta'].includes(c.status))
-      .reduce((sum, c) => sum + (c.valorOrcamento || 0), 0);
+/* =========================================================
+   UI – Header e Tabs
+========================================================= */
 
-    return { total, leads, ativo, vendas, valorPipeline };
-  }, [clientesFiltrados]);
+function HeaderCRM() {
+  const { state, dispatch } = useCRM();
+  const pipeline = state.pipelines[state.pipelineAtivo];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-blue-50">
-            <Users className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-600">Total Leads</h3>
-            <div className="text-2xl font-bold">{metricas.total}</div>
-          </div>
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-gray-900">CRM</h1>
+        <span className="text-gray-400">—</span>
+        <div className="flex items-center gap-2">
+          <button
+            className={`px-3 py-1.5 rounded-lg border ${state.view === "chat" ? "bg-gray-100" : ""}`}
+            onClick={() => dispatch({ type: "SET_VIEW", payload: "chat" })}
+            title="Chat"
+          >
+            <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> Chat</div>
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded-lg border ${state.view === "dashboard" ? "bg-gray-100" : ""}`}
+            onClick={() => dispatch({ type: "SET_VIEW", payload: "dashboard" })}
+            title="Dashboard"
+          >
+            <div className="flex items-center gap-2"><PieChart className="w-4 h-4" /> Dashboard</div>
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded-lg border ${state.view === "pipeline" ? "bg-gray-100" : ""}`}
+            onClick={() => dispatch({ type: "SET_VIEW", payload: "pipeline" })}
+            title="Pipeline (Kanban)"
+          >
+            <div className="flex items-center gap-2"><LayoutGrid className="w-4 h-4" /> Pipeline</div>
+          </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-yellow-50">
-            <Target className="w-6 h-6 text-yellow-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-600">Pipeline Ativo</h3>
-            <div className="text-2xl font-bold">{metricas.ativo}</div>
-          </div>
+      <div className="flex items-center gap-2">
+        {/* seletor de pipeline (aparece em todas as abas) */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600 hidden sm:inline">Pipeline:</span>
+          <select
+            className="border rounded-lg px-3 py-1.5"
+            value={state.pipelineAtivo}
+            onChange={(e) => dispatch({ type: "SET_PIPELINE", payload: e.target.value })}
+          >
+            {Object.values(state.pipelines).map(p => (
+              <option key={p.id} value={p.id}>{p.nome}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => dispatch({ type: "OPEN_MODAL", payload: "pipelines" })}
+            className="px-2 py-1.5 border rounded-lg text-sm"
+            title="Gerenciar pipelines"
+          >
+            Gerenciar
+          </button>
         </div>
+
+        <button
+          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "relatorios" })}
+          className="px-3 py-1.5 border rounded-lg flex items-center gap-2"
+          title="Relatórios / Exportar"
+        >
+          <Download className="w-4 h-4" /> Relatórios
+        </button>
+
+        <button
+          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "metas" })}
+          className="px-3 py-1.5 border rounded-lg flex items-center gap-2"
+          title="Metas do pipeline"
+        >
+          <Target className="w-4 h-4" /> Metas
+        </button>
+
+        <button
+          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "novo" })}
+          className="ml-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Novo Lead
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   Dashboard (cards simples)
+========================================================= */
+
+function Dashboard() {
+  const list = useClientesFiltrados();
+  const { state } = useCRM();
+
+  const metricas = useMemo(() => {
+    const total = list.length;
+    const ativo = list.filter((c) => ["interessado", "negociacao", "proposta"].includes(c.status)).length;
+    const vendas = list.filter((c) => c.status === "vendido").length;
+    const valor = list
+      .filter((c) => c.valorOrcamento && ["interessado", "negociacao", "proposta"].includes(c.status))
+      .reduce((s, c) => s + (c.valorOrcamento || 0), 0);
+    return { total, ativo, vendas, valor };
+  }, [list]);
+
+  const porColuna = useMemo(() => {
+    const base: Record<Status, number> = { lead: 0, contato: 0, interessado: 0, negociacao: 0, proposta: 0, vendido: 0, perdido: 0 };
+    list.forEach((c) => (base[c.status] += 1));
+    return base;
+  }, [list]);
+
+  const barra = (qtd: number, meta?: number) => {
+    const pct = Math.min(100, Math.round(((qtd || 0) / (meta || 1)) * 100));
+    return (
+      <div className="w-full h-2 bg-gray-200 rounded">
+        <div className={`h-2 rounded ${pct >= 100 ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardMetric icon={<Users className="w-6 h-6 text-blue-600" />} title="Total leads" value={metricas.total} />
+        <CardMetric icon={<Target className="w-6 h-6 text-yellow-600" />} title="Pipeline ativo" value={metricas.ativo} />
+        <CardMetric icon={<DollarSign className="w-6 h-6 text-green-600" />} title="Vendas" value={metricas.vendas} />
+        <CardMetric
+          icon={<BarChart3 className="w-6 h-6 text-purple-600" />}
+          title="Valor pipeline"
+          value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(metricas.valor)}
+        />
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-green-50">
-            <DollarSign className="w-6 h-6 text-green-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-600">Vendas</h3>
-            <div className="text-2xl font-bold">{metricas.vendas}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-purple-50">
-            <BarChart3 className="w-6 h-6 text-purple-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-600">Pipeline Valor</h3>
-            <div className="text-lg font-bold text-green-600">
-              {formatCurrency(metricas.valorPipeline)}
+      <div className="bg-white border rounded-lg p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {(["lead", "contato", "interessado", "negociacao", "proposta", "vendido"] as (keyof MetasPipeline)[]).map((col) => (
+            <div key={col}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm capitalize">{col}</span>
+                <span className="text-xs text-gray-500">
+                  {porColuna[col as Status]}/{state.metas[col]}
+                </span>
+              </div>
+              {barra(porColuna[col as Status], state.metas[col])}
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-function FiltrosCRM() {
+function CardMetric({ icon, title, value }: { icon: React.ReactNode; title: string; value: React.ReactNode }) {
+  return (
+    <div className="bg-white border rounded-lg p-5">
+      <div className="flex gap-3 items-center">
+        <div className="p-3 rounded bg-gray-50">{icon}</div>
+        <div>
+          <div className="text-sm text-gray-600">{title}</div>
+          <div className="text-2xl font-bold">{value}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   Chat (chat-first)
+========================================================= */
+
+function Chat() {
   const { state, dispatch } = useCRM();
-  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const contatos = useClientesFiltrados();
+  const [busca, setBusca] = useState("");
+  const [texto, setTexto] = useState("");
+  const sel = state.clienteSelecionado ?? contatos[0] ?? null;
+  const msgs = useMensagens(sel?.id);
+  const endRef = useRef<HTMLDivElement | null>(null);
 
-  const handleFiltroChange = (key: keyof FiltrosCRM, value: any) => {
-    dispatch({
-      type: 'SET_FILTROS',
-      payload: { [key]: value }
-    });
+  useEffect(() => {
+    if (sel && (!state.clienteSelecionado || state.clienteSelecionado.id !== sel.id)) {
+      dispatch({ type: "SELECT_CLIENTE", payload: sel });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.id]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs.length]);
+
+  const enviar = () => {
+    if (!sel || !texto.trim()) return;
+    const m: Mensagem = {
+      id: crypto.randomUUID(),
+      clienteId: sel.id,
+      autor: "agente",
+      canal: "whatsapp",
+      texto: texto.trim(),
+      data: new Date().toISOString(),
+    };
+    dispatch({ type: "ADD_MSG", payload: m });
+    setTexto("");
+    // loga atividade
+    const a: Atividade = {
+      id: crypto.randomUUID(),
+      clienteId: sel.id,
+      tipo: "whatsapp",
+      descricao: "Mensagem enviada no chat",
+      data: m.data,
+      responsavel: sel.responsavel,
+      status: "concluido",
+    };
+    dispatch({ type: "ADD_ATIVIDADE", payload: a });
   };
 
-  const limparFiltros = () => {
-    dispatch({ type: 'CLEAR_FILTROS' });
-  };
+  const contatosFiltrados = useMemo(() => {
+    const s = busca.trim().toLowerCase();
+    if (!s) return contatos;
+    return contatos.filter(c =>
+      c.nome.toLowerCase().includes(s) || c.email.toLowerCase().includes(s) || c.telefone.includes(s)
+    );
+  }, [busca, contatos]);
 
   return (
-    <div className="bg-white rounded-lg border p-4 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          {/* Busca */}
-          <div className="relative min-w-[300px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              placeholder="Buscar leads..."
-              value={state.filtros.busca}
-              onChange={(e) => handleFiltroChange('busca', e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Filtros rápidos */}
-          <select
-            value={state.filtros.status}
-            onChange={(e) => handleFiltroChange('status', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
-          >
-            <option value="">Todos os status</option>
-            <option value="lead">Lead</option>
-            <option value="contato">Contato</option>
-            <option value="interessado">Interessado</option>
-            <option value="negociacao">Negociação</option>
-            <option value="proposta">Proposta</option>
-            <option value="vendido">Vendido</option>
-            <option value="perdido">Perdido</option>
-          </select>
-
-          <select
-            value={state.filtros.responsavel}
-            onChange={(e) => handleFiltroChange('responsavel', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
-          >
-            <option value="">Todos os corretores</option>
-            <option value="João Corretor">João Corretor</option>
-            <option value="Ana Corretora">Ana Corretora</option>
-            <option value="Maria Corretora">Maria Corretora</option>
-          </select>
+    <div className="grid grid-cols-4 gap-4">
+      {/* lista de contatos – 1/4 */}
+      <div className="col-span-1 bg-white border rounded-lg overflow-hidden flex flex-col min-h-[70vh]">
+        <div className="p-3 border-b flex items-center gap-2">
+          <Search className="w-4 h-4 text-gray-500" />
+          <input
+            className="w-full outline-none"
+            placeholder="Buscar contatos…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setMostrarFiltros(!mostrarFiltros)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-          >
-            <Filter className="w-4 h-4" />
-            Mais filtros
-          </button>
-
-          <button
-            onClick={limparFiltros}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Limpar
-          </button>
+        <div className="overflow-y-auto">
+          {contatosFiltrados.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => dispatch({ type: "SELECT_CLIENTE", payload: c })}
+              className={`w-full px-3 py-3 flex items-center gap-3 hover:bg-gray-50 text-left ${
+                state.clienteSelecionado?.id === c.id ? "bg-gray-50" : ""
+              }`}
+            >
+              <Avatar nome={c.nome} url={c.avatarUrl} temperatura={c.temperatura} />
+              <div className="min-w-0">
+                <div className="font-medium truncate">{c.nome}</div>
+                <div className="text-xs text-gray-500 truncate">{c.empreendimentoInteresse || "Sem interesse definido"}</div>
+              </div>
+              <div className="ml-auto text-xs text-gray-400">{c.ultimoContato ? timeBR(c.ultimoContato) : ""}</div>
+            </button>
+          ))}
+          {contatosFiltrados.length === 0 && (
+            <div className="p-6 text-center text-sm text-gray-500">Nenhum contato.</div>
+          )}
         </div>
       </div>
 
-      {/* Filtros expandidos */}
-      {mostrarFiltros && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
-          <select
-            value={state.filtros.origem}
-            onChange={(e) => handleFiltroChange('origem', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
-          >
-            <option value="">Todas as origens</option>
-            <option value="site">Site</option>
-            <option value="indicacao">Indicação</option>
-            <option value="telemarketing">Telemarketing</option>
-            <option value="redes-sociais">Redes Sociais</option>
-            <option value="evento">Evento</option>
+      {/* janela do chat – 3/4 */}
+      <div className="col-span-3 bg-white border rounded-lg flex flex-col min-h-[70vh]">
+        {/* topo */}
+        <div className="px-4 py-3 border-b flex items-center gap-3">
+          {sel ? (
+            <>
+              <Avatar nome={sel.nome} url={sel.avatarUrl} temperatura={sel.temperatura} />
+              <div className="min-w-0">
+                <div className="font-semibold">{sel.nome}</div>
+                <div className="text-xs text-gray-500">
+                  {sel.email} • {sel.telefone}
+                </div>
+              </div>
+              <span className="ml-auto text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 capitalize">{sel.status}</span>
+              <button
+                className="px-2 py-1 border rounded text-sm"
+                onClick={() => {
+                  dispatch({ type: "OPEN_MODAL", payload: "detalhes" });
+                }}
+              >
+                Detalhes
+              </button>
+            </>
+          ) : (
+            <div className="text-sm text-gray-500">Selecione um contato</div>
+          )}
+        </div>
+
+        {/* mensagens */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {!sel && <div className="text-center text-sm text-gray-500">Nenhum contato selecionado.</div>}
+          {sel &&
+            msgs.map((m) => (
+              <div key={m.id} className={`flex ${m.autor === "agente" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm ${
+                    m.autor === "agente" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  <div>{m.texto}</div>
+                  <div className={`text-[10px] mt-1 ${m.autor === "agente" ? "text-blue-100" : "text-gray-500"}`}>
+                    {dateBR(m.data)} {timeBR(m.data)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          <div ref={endRef} />
+        </div>
+
+        {/* composer */}
+        <div className="border-t p-3 flex items-center gap-2">
+          <button className="px-2 py-2 border rounded-lg" title="Anexar"><Paperclip className="w-4 h-4" /></button>
+          <input
+            className="flex-1 px-3 py-2 border rounded-lg"
+            placeholder="Escreva uma mensagem…"
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+          />
+          <button onClick={enviar} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <Send className="w-4 h-4" /> Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Avatar({ nome, url, temperatura }: { nome: string; url?: string; temperatura: Temperatura }) {
+  if (url) return <img src={url} alt={nome} className="w-10 h-10 rounded-full object-cover" />;
+  const color =
+    temperatura === "quente" ? "bg-red-500" : temperatura === "morno" ? "bg-yellow-500" : "bg-blue-500";
+  return (
+    <div className={`w-10 h-10 rounded-full text-white grid place-items-center ${color}`} title={`Temperatura: ${temperatura}`}>
+      {initials(nome)}
+    </div>
+  );
+}
+
+/* =========================================================
+   Filtros compactos (usado no pipeline)
+========================================================= */
+
+function FiltrosCompactos() {
+  const { state, dispatch } = useCRM();
+  const [open, setOpen] = useState(false);
+  const set = (k: keyof FiltrosCRM, v: any) => dispatch({ type: "SET_FILTRO", payload: { [k]: v } });
+
+  return (
+    <div className="bg-white border rounded-lg mb-4">
+      <button
+        className="w-full flex items-center justify-between px-4 py-3"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="text-sm text-gray-700 flex items-center gap-2"><Filter className="w-4 h-4" /> Filtros</div>
+        <ChevronDown className={`w-4 h-4 text-gray-500 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
+            <input
+              className="pl-9 pr-3 py-2 border rounded-lg w-full"
+              placeholder="Buscar por nome, e-mail ou telefone"
+              value={state.filtros.busca}
+              onChange={(e) => set("busca", e.target.value)}
+            />
+          </div>
+
+          <select className="border rounded-lg px-3 py-2" value={state.filtros.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="">Todos status</option>
+            {["lead", "contato", "interessado", "negociacao", "proposta", "vendido", "perdido"].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
 
-          <select
-            value={state.filtros.prioridade}
-            onChange={(e) => handleFiltroChange('prioridade', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
-          >
-            <option value="">Todas prioridades</option>
-            <option value="alta">Alta</option>
-            <option value="media">Média</option>
-            <option value="baixa">Baixa</option>
-          </select>
-
-          <select
-            value={state.filtros.temperatura}
-            onChange={(e) => handleFiltroChange('temperatura', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
-          >
-            <option value="">Todas temperaturas</option>
-            <option value="quente">Quente</option>
-            <option value="morno">Morno</option>
-            <option value="frio">Frio</option>
+          <select className="border rounded-lg px-3 py-2" value={state.filtros.origem} onChange={(e) => set("origem", e.target.value)}>
+            <option value="">Todas origens</option>
+            {["site", "indicacao", "telemarketing", "redes-sociais", "evento", "outros"].map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
           </select>
 
           <input
-            type="text"
-            placeholder="Cidade"
-            value={state.filtros.cidade}
-            onChange={(e) => handleFiltroChange('cidade', e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300"
+            className="border rounded-lg px-3 py-2"
+            placeholder="Responsável"
+            value={state.filtros.responsavel}
+            onChange={(e) => set("responsavel", e.target.value)}
           />
         </div>
       )}
@@ -680,436 +812,408 @@ function FiltrosCRM() {
   );
 }
 
-function TabelaClientes() {
-  const { clientesFiltrados } = useClienteFilter();
-  const { formatCurrency, formatDate, formatPhone } = useFormatters();
-  const { dispatch } = useCRM();
+/* =========================================================
+   Pipeline (Kanban) — drag & drop e drawer
+========================================================= */
 
-  const handleClienteClick = (cliente: Cliente) => {
-    dispatch({ type: 'SET_CLIENTE_SELECIONADO', payload: cliente });
-    dispatch({ type: 'SET_MODAL_ATIVO', payload: 'detalhes-cliente' });
-  };
+const ALL_STATUS: Status[] = ["lead", "contato", "interessado", "negociacao", "proposta", "vendido", "perdido"];
 
+function Pipeline() {
+  const { state } = useCRM();
   return (
-    <div className="bg-white rounded-lg border">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Cliente
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Origem
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Valor
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Responsável
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Ações
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {clientesFiltrados.map((cliente) => (
-              <tr
-                key={cliente.id}
-                className="hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleClienteClick(cliente)}
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-medium ${
-                        cliente.temperatura === 'quente' ? 'bg-red-500' :
-                        cliente.temperatura === 'morno' ? 'bg-yellow-500' : 'bg-blue-500'
-                      }`}>
-                        {cliente.nome.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{cliente.nome}</div>
-                      <div className="text-sm text-gray-500">{cliente.email}</div>
-                      <div className="text-sm text-gray-500">{formatPhone(cliente.telefone)}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                    cliente.status === 'vendido' ? 'bg-green-100 text-green-800' :
-                    cliente.status === 'perdido' ? 'bg-red-100 text-red-800' :
-                    cliente.status === 'proposta' ? 'bg-purple-100 text-purple-800' :
-                    cliente.status === 'negociacao' ? 'bg-orange-100 text-orange-800' :
-                    cliente.status === 'interessado' ? 'bg-yellow-100 text-yellow-800' :
-                    cliente.status === 'contato' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cliente.status}
-                  </span>
-                  <div className="flex items-center mt-1">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      cliente.prioridade === 'alta' ? 'bg-red-100 text-red-800' :
-                      cliente.prioridade === 'media' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {cliente.prioridade}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                    cliente.origem === 'site' ? 'bg-blue-100 text-blue-800' :
-                    cliente.origem === 'indicacao' ? 'bg-green-100 text-green-800' :
-                    cliente.origem === 'telemarketing' ? 'bg-purple-100 text-purple-800' :
-                    cliente.origem === 'redes-sociais' ? 'bg-pink-100 text-pink-800' :
-                    cliente.origem === 'evento' ? 'bg-orange-100 text-orange-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cliente.origem === 'redes-sociais' ? 'social' : cliente.origem}
-                  </span>
-                  {cliente.score && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Score: {cliente.score}
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {cliente.valorOrcamento ? formatCurrency(cliente.valorOrcamento) : '-'}
-                  </div>
-                  {cliente.empreendimentoInteresse && (
-                    <div className="text-sm text-gray-500 truncate max-w-32">
-                      {cliente.empreendimentoInteresse}
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{cliente.responsavel}</div>
-                  <div className="text-sm text-gray-500">
-                    {formatDate(cliente.dataCriacao)}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('Ligar para', cliente.telefone);
-                      }}
-                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                      title="Ligar"
-                    >
-                      <Phone className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('Email para', cliente.email);
-                      }}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Email"
-                    >
-                      <Mail className="w-4 h-4" />
-                    </button>
-                    {cliente.whatsapp && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('WhatsApp para', cliente.whatsapp);
-                        }}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                        title="WhatsApp"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleClienteClick(cliente);
-                      }}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Ver detalhes"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Estado vazio */}
-      {clientesFiltrados.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum cliente encontrado</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Tente ajustar os filtros ou adicionar novos leads.
-          </p>
-        </div>
-      )}
+    <div>
+      <FiltrosCompactos />
+      <Board />
     </div>
   );
 }
 
-function ModalDetalhesCliente() {
+function Board() {
   const { state, dispatch } = useCRM();
-  const { formatCurrency, formatDate, formatPhone } = useFormatters();
+  const list = useClientesFiltrados();
+  const estagios = state.pipelines[state.pipelineAtivo]?.estagios ?? ALL_STATUS;
 
-  if (state.modalAtivo !== 'detalhes-cliente' || !state.clienteSelecionado) {
-    return null;
-  }
+  const porColuna = useMemo(() => {
+    return estagios.reduce<Record<Status, Cliente[]>>((acc, s) => {
+      acc[s] = list.filter((c) => c.status === s);
+      return acc;
+    }, { lead: [], contato: [], interessado: [], negociacao: [], proposta: [], vendido: [], perdido: [] });
+  }, [list, estagios]);
 
-  const cliente = state.clienteSelecionado;
-
-  const fecharModal = () => {
-    dispatch({ type: 'SET_MODAL_ATIVO', payload: null });
-    dispatch({ type: 'SET_CLIENTE_SELECIONADO', payload: null });
+  const onDropCard = (clienteId: string, dest: Status) => {
+    dispatch({ type: "MOVE_STATUS", payload: { id: clienteId, status: dest } });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="max-w-4xl w-full bg-white rounded-xl shadow-lg max-h-[90vh] overflow-y-auto">
+    <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      {estagios.map((col) => (
+        <Coluna
+          key={col}
+          titulo={col}
+          cards={porColuna[col]}
+          onDrop={(id) => onDropCard(id, col)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Coluna({ titulo, cards, onDrop }: { titulo: Status; cards: Cliente[]; onDrop: (id: string) => void }) {
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (id) onDrop(id);
+  };
+
+  return (
+    <div
+      className="bg-white border rounded-lg p-3 min-h-[280px] flex flex-col"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold capitalize">{titulo}</div>
+        <div className="text-xs text-gray-500">{cards.length}</div>
+      </div>
+
+      <div className="space-y-2 flex-1">
+        {cards.map((c) => <CardKanban key={c.id} c={c} />)}
+        {cards.length === 0 && (
+          <div className="text-xs text-gray-400 text-center py-6 border border-dashed rounded">Arraste cards aqui</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CardKanban({ c }: { c: Cliente }) {
+  const { dispatch } = useCRM();
+  const onDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", c.id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="border rounded-lg p-3 hover:shadow-sm bg-white cursor-grab active:cursor-grabbing"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <Avatar nome={c.nome} temperatura={c.temperatura} />
+        <div className="font-medium text-sm truncate">{c.nome}</div>
+        <button
+          className="ml-auto p-1 rounded hover:bg-gray-50"
+          title="Ações"
+        >
+          <MoreVertical className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
+      <div className="text-xs text-gray-500 mb-2">{c.empreendimentoInteresse || "Sem interesse definido"}</div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">{money(c.valorOrcamento)}</span>
+        {c.alertaSLA ? (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700">
+            <AlertTriangle className="w-3 h-3" /> SLA
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+            <Clock className="w-3 h-3" /> OK
+          </span>
+        )}
+        <button
+          className="ml-auto text-xs px-2 py-1 border rounded hover:bg-gray-50"
+          onClick={() => {
+            dispatch({ type: "SELECT_CLIENTE", payload: c });
+            dispatch({ type: "OPEN_MODAL", payload: "detalhes" });
+          }}
+        >
+          Detalhes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   Modais / Drawers
+========================================================= */
+
+function ModalRelatorios() {
+  const { state, dispatch } = useCRM();
+  const open = state.modalAtivo === "relatorios";
+  const list = useClientesFiltrados();
+  const atividades = useAtividades();
+
+  if (!open) return null;
+
+  const exportCSV = (nome: string, rows: Record<string, any>[]) => {
+    const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
+    const csv = [headers.join(";")]
+      .concat(
+        rows.map((r) =>
+          headers.map((h) => {
+            const v = r[h] ?? "";
+            const s = typeof v === "string" ? v.replace(/"/g, '""') : String(v);
+            return `"${s}"`;
+          }).join(";")
+        )
+      ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${nome}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportLeads = () => {
+    exportCSV("leads", list.map((c) => ({
+      id: c.id, nome: c.nome, email: c.email, telefone: c.telefone, origem: c.origem, status: c.status,
+      responsavel: c.responsavel, criado_em: c.dataCriacao, ultimo_contato: c.ultimoContato || "", proximo_followup: c.proximoFollowUp || "",
+      valor: c.valorOrcamento || "", cidade: c.cidade || "", temperatura: c.temperatura, alertaSLA: c.alertaSLA ? "SIM" : "NÃO"
+    })));
+  };
+  const exportAtividades = () => {
+    exportCSV("atividades", atividades.map((a) => ({
+      id: a.id, clienteId: a.clienteId, tipo: a.tipo, descricao: a.descricao, data: a.data, responsavel: a.responsavel, status: a.status
+    })));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-xl shadow-lg">
         <div className="p-6">
-          {/* Header do Modal */}
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className={`h-16 w-16 rounded-full flex items-center justify-center text-white font-bold text-xl ${
-                cliente.temperatura === 'quente' ? 'bg-red-500' :
-                cliente.temperatura === 'morno' ? 'bg-yellow-500' : 'bg-blue-500'
-              }`}>
-                {cliente.nome.split(' ').map(n => n[0]).join('').substring(0, 2)}
-              </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Relatórios / Exportação</h3>
+            <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}><X className="w-6 h-6" /></button>
+          </div>
+          <div className="space-y-3">
+            <button onClick={exportLeads} className="w-full px-4 py-3 border rounded-lg flex items-center justify-between hover:bg-gray-50">
+              <span>Exportar Leads (CSV)</span><Download className="w-4 h-4" />
+            </button>
+            <button onClick={exportAtividades} className="w-full px-4 py-3 border rounded-lg flex items-center justify-between hover:bg-gray-50">
+              <span>Exportar Atividades (CSV)</span><Download className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalMetas() {
+  const { state, dispatch } = useCRM();
+  const open = state.modalAtivo === "metas";
+  const [meta, setMeta] = useState<MetasPipeline>(state.metas);
+  if (!open) return null;
+
+  const salvar = () => {
+    dispatch({ type: "SET_METAS", payload: meta });
+    dispatch({ type: "CLOSE_MODAL" });
+  };
+
+  const Input = ({ k }: { k: keyof MetasPipeline }) => (
+    <div>
+      <label className="text-sm text-gray-600 capitalize">{k}</label>
+      <input
+        type="number"
+        min={0}
+        className="w-full border rounded-lg px-3 py-2"
+        value={meta[k]}
+        onChange={(e) => setMeta((m) => ({ ...m, [k]: parseInt(e.target.value || "0", 10) }))}
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-xl shadow-lg">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Metas do Pipeline (mês)</h3>
+            <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}><X className="w-6 h-6" /></button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input k="lead" /><Input k="contato" /><Input k="interessado" /><Input k="negociacao" /><Input k="proposta" /><Input k="vendido" />
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <button className="px-4 py-2 border rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}>Cancelar</button>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg" onClick={salvar}>Salvar Metas</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DrawerDetalhes() {
+  const { state, dispatch } = useCRM();
+  const c = state.clienteSelecionado;
+  const atividades = useAtividades(c?.id);
+  const [novo, setNovo] = useState<Partial<Atividade>>({
+    tipo: "nota",
+    descricao: "",
+    data: new Date().toISOString().slice(0, 16),
+    status: "concluido",
+    responsavel: c?.responsavel || "—",
+  });
+  const [follow, setFollow] = useState({
+    data: c?.proximoFollowUp || "",
+    responsavel: c?.responsavel || "",
+  });
+
+  if (state.modalAtivo !== "detalhes" || !c) return null;
+
+  const salvarAtividade = () => {
+    if (!novo.descricao?.trim()) return window.alert("Descreva a atividade.");
+    const atividade: Atividade = {
+      id: crypto.randomUUID(),
+      clienteId: c.id,
+      tipo: (novo.tipo || "nota") as TipoAtividade,
+      descricao: novo.descricao!,
+      data: (novo.data || new Date().toISOString()) as string,
+      responsavel: novo.responsavel || c.responsavel,
+      status: (novo.status || "concluido") as StatusAtividade,
+      duracaoMinutos: novo.duracaoMinutos,
+    };
+    dispatch({ type: "ADD_ATIVIDADE", payload: atividade });
+
+    const atualizado: Cliente = { ...c, ultimoContato: atividade.data, numeroContatos: (c.numeroContatos || 0) + 1 };
+    dispatch({ type: "UPDATE_CLIENTE", payload: atualizado });
+
+    setNovo({ tipo: "nota", descricao: "", data: new Date().toISOString().slice(0, 16), status: "concluido", responsavel: c.responsavel });
+  };
+
+  const agendarFollowUp = () => {
+    if (!follow.data) return window.alert("Informe a data do follow-up.");
+    const atualizado: Cliente = { ...c, proximoFollowUp: follow.data };
+    dispatch({ type: "UPDATE_CLIENTE", payload: atualizado });
+
+    const a: Atividade = {
+      id: crypto.randomUUID(),
+      clienteId: c.id,
+      tipo: "follow-up",
+      descricao: "Follow-up agendado",
+      data: follow.data,
+      responsavel: follow.responsavel || c.responsavel,
+      status: "agendado",
+    };
+    dispatch({ type: "ADD_ATIVIDADE", payload: a });
+  };
+
+  const mudarStatus = (status: Status) => {
+    dispatch({ type: "MOVE_STATUS", payload: { id: c.id, status } });
+    dispatch({ type: "UPDATE_CLIENTE", payload: { ...c, status } });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={() => dispatch({ type: "CLOSE_MODAL" })} />
+      <div className="absolute right-0 top-0 h-full w-full sm:w-[560px] bg-white shadow-xl overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Avatar nome={c.nome} temperatura={c.temperatura} />
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">{cliente.nome}</h2>
-                <p className="text-gray-600">{cliente.email}</p>
-                <p className="text-gray-600">{formatPhone(cliente.telefone)}</p>
+                <div className="text-xl font-bold">{c.nome}</div>
+                <div className="text-sm text-gray-600">{c.email}</div>
+                <div className="text-xs text-gray-500">Criado em {dateBR(c.dataCriacao)} • Último contato {dateBR(c.ultimoContato)}</div>
               </div>
             </div>
-            <button
-              onClick={fecharModal}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}>
               <X className="w-6 h-6" />
             </button>
           </div>
 
-          {/* Informações principais */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Status:</label>
-                <div className="mt-1">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium capitalize ${
-                    cliente.status === 'vendido' ? 'bg-green-100 text-green-800' :
-                    cliente.status === 'perdido' ? 'bg-red-100 text-red-800' :
-                    cliente.status === 'proposta' ? 'bg-purple-100 text-purple-800' :
-                    cliente.status === 'negociacao' ? 'bg-orange-100 text-orange-800' :
-                    cliente.status === 'interessado' ? 'bg-yellow-100 text-yellow-800' :
-                    cliente.status === 'contato' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cliente.status}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Prioridade:</label>
-                <div className="mt-1">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium capitalize ${
-                    cliente.prioridade === 'alta' ? 'bg-red-100 text-red-800' :
-                    cliente.prioridade === 'media' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cliente.prioridade}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Temperatura:</label>
-                <div className="mt-1">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium capitalize ${
-                    cliente.temperatura === 'quente' ? 'bg-red-100 text-red-800' :
-                    cliente.temperatura === 'morno' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-blue-100 text-blue-800'
-                  }`}>
-                    {cliente.temperatura}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Origem:</label>
-                <div className="mt-1">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium capitalize ${
-                    cliente.origem === 'site' ? 'bg-blue-100 text-blue-800' :
-                    cliente.origem === 'indicacao' ? 'bg-green-100 text-green-800' :
-                    cliente.origem === 'telemarketing' ? 'bg-purple-100 text-purple-800' :
-                    cliente.origem === 'redes-sociais' ? 'bg-pink-100 text-pink-800' :
-                    cliente.origem === 'evento' ? 'bg-orange-100 text-orange-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cliente.origem === 'redes-sociais' ? 'social' : cliente.origem}
-                  </span>
-                </div>
+          {/* topo status */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="text-xs text-blue-700">Status</div>
+              <div className="font-semibold capitalize">{c.status}</div>
+              <div className="mt-2 flex gap-2 flex-wrap">
+                {ALL_STATUS.filter((s) => s !== c.status && !["lead"].includes(s)).map((s) => (
+                  <button key={s} className="text-xs border rounded px-2 py-1 hover:bg-white" onClick={() => mudarStatus(s as Status)}>
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Responsável:</label>
-                <p className="mt-1 text-sm text-gray-900">{cliente.responsavel}</p>
-              </div>
-
-              {cliente.valorOrcamento && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Valor do Orçamento:</label>
-                  <p className="mt-1 text-lg font-semibold text-green-600">
-                    {formatCurrency(cliente.valorOrcamento)}
-                  </p>
-                </div>
-              )}
-
-              {cliente.cidade && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Cidade:</label>
-                  <p className="mt-1 text-sm text-gray-900">{cliente.cidade}</p>
-                </div>
-              )}
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Data de Criação:</label>
-                <p className="mt-1 text-sm text-gray-900">{formatDate(cliente.dataCriacao)}</p>
-              </div>
-
-              {cliente.ultimoContato && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Último Contato:</label>
-                  <p className="mt-1 text-sm text-gray-900">{formatDate(cliente.ultimoContato)}</p>
-                </div>
-              )}
-
-              {cliente.proximoFollowUp && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Próximo Follow-up:</label>
-                  <p className="mt-1 text-sm text-gray-900">{formatDate(cliente.proximoFollowUp)}</p>
-                </div>
-              )}
+            <div className="bg-green-50 p-3 rounded-lg">
+              <div className="text-xs text-green-700">Valor</div>
+              <div className="font-semibold text-green-700">{money(c.valorOrcamento)}</div>
+            </div>
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <div className="text-xs text-yellow-700">Próximo follow-up</div>
+              <div className="font-semibold">{c.proximoFollowUp ? dateBR(c.proximoFollowUp) : "-"}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-xs text-gray-600">Responsável</div>
+              <div className="font-semibold">{c.responsavel}</div>
             </div>
           </div>
 
-          {/* Empreendimento e Tags */}
-          {(cliente.empreendimentoInteresse || cliente.tags) && (
-            <div className="mb-6">
-              {cliente.empreendimentoInteresse && (
-                <div className="mb-4">
-                  <label className="text-sm font-medium text-gray-700">Empreendimento de Interesse:</label>
-                  <p className="mt-1 text-sm text-gray-900">{cliente.empreendimentoInteresse}</p>
-                </div>
-              )}
-
-              {cliente.tags && cliente.tags.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Tags:</label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {cliente.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full font-medium"
-                      >
-                        {tag}
+          {/* timeline + forms */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <h4 className="font-semibold mb-3">Atividades</h4>
+              <div className="space-y-3">
+                {useAtividades(c.id).map((a) => (
+                  <div key={a.id} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 capitalize">{a.tipo}</span>
+                        <span className="text-xs text-gray-500">{dateBR(a.data)} • {a.responsavel}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded ${a.status === "concluido" ? "bg-green-100 text-green-700" : a.status === "agendado" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                        {a.status}
                       </span>
-                    ))}
+                    </div>
+                    <div className="mt-2 text-sm text-gray-700">{a.descricao}</div>
                   </div>
-                </div>
-              )}
+                ))}
+                {useAtividades(c.id).length === 0 && (
+                  <div className="text-sm text-gray-500">Sem atividades ainda.</div>
+                )}
+              </div>
             </div>
-          )}
 
-          {/* Observações */}
-          {cliente.observacoes && (
-            <div className="mb-6">
-              <label className="text-sm font-medium text-gray-700">Observações:</label>
-              <p className="mt-1 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                {cliente.observacoes}
-              </p>
+            <div>
+              <h4 className="font-semibold mb-3">Nova atividade</h4>
+              <div className="border rounded-lg p-3 space-y-3">
+                <select className="w-full border rounded px-3 py-2" value={novo.tipo} onChange={(e) => setNovo((f) => ({ ...f, tipo: e.target.value as TipoAtividade }))}>
+                  {["ligacao", "email", "whatsapp", "reuniao", "visita", "proposta", "nota"].map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input className="w-full border rounded px-3 py-2" placeholder="Responsável" value={novo.responsavel || c.responsavel} onChange={(e) => setNovo((f) => ({ ...f, responsavel: e.target.value }))}/>
+                <input type="datetime-local" className="w-full border rounded px-3 py-2" value={novo.data} onChange={(e) => setNovo((f) => ({ ...f, data: e.target.value }))}/>
+                <textarea className="w-full border rounded px-3 py-2" rows={3} placeholder="Descrição" value={novo.descricao || ""} onChange={(e) => setNovo((f) => ({ ...f, descricao: e.target.value }))}/>
+                <div className="flex justify-end">
+                  <button onClick={salvarAtividade} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Salvar
+                  </button>
+                </div>
+              </div>
+
+              <h4 className="font-semibold mt-6 mb-3">Agendar follow-up</h4>
+              <div className="border rounded-lg p-3 space-y-3">
+                <input type="datetime-local" className="w-full border rounded px-3 py-2" value={follow.data} onChange={(e) => setFollow((f) => ({ ...f, data: e.target.value }))}/>
+                <input className="w-full border rounded px-3 py-2" placeholder="Responsável" value={follow.responsavel} onChange={(e) => setFollow((f) => ({ ...f, responsavel: e.target.value }))}/>
+                <button onClick={agendarFollowUp} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg flex items-center justify-center gap-2">
+                  <Clock className="w-4 h-4" /> Agendar
+                </button>
+              </div>
             </div>
-          )}
-
-          {/* Métricas adicionais */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {cliente.score && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-blue-600" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Score</p>
-                    <p className="text-lg font-bold text-blue-600">{cliente.score}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {cliente.numeroContatos && (
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="text-sm font-medium text-green-900">Contatos</p>
-                    <p className="text-lg font-bold text-green-600">{cliente.numeroContatos}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {cliente.tempoResposta && (
-              <div className="bg-orange-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-orange-600" />
-                  <div>
-                    <p className="text-sm font-medium text-orange-900">Tempo Resposta</p>
-                    <p className="text-lg font-bold text-orange-600">{cliente.tempoResposta}h</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Ações */}
-          <div className="flex gap-3 pt-6 border-t">
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-              <Phone className="w-4 h-4" />
-              Ligar
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <Mail className="w-4 h-4" />
-              Email
-            </button>
-            {cliente.whatsapp && (
-              <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                <MessageSquare className="w-4 h-4" />
-                WhatsApp
-              </button>
-            )}
-            <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-              <Edit2 className="w-4 h-4" />
-              Editar
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
-              <Calendar className="w-4 h-4" />
-              Agendar
-            </button>
+          <div className="flex gap-2 pt-6">
+            <button className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2"><Phone className="w-4 h-4" /> Ligar</button>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2"><Mail className="w-4 h-4" /> Email</button>
+            {c.whatsapp && <button className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2"><MessageSquare className="w-4 h-4" /> WhatsApp</button>}
+            <button className="ml-auto px-4 py-2 bg-purple-600 text-white rounded-lg flex items-center gap-2"><Edit2 className="w-4 h-4" /> Editar</button>
           </div>
         </div>
       </div>
@@ -1117,56 +1221,217 @@ function ModalDetalhesCliente() {
   );
 }
 
-// ==================== COMPONENTE PRINCIPAL ====================
+function ModalNovoLead() {
+  const { state, dispatch } = useCRM();
+  const open = state.modalAtivo === "novo";
+  const [form, setForm] = useState<Partial<Cliente>>({
+    nome: "",
+    email: "",
+    telefone: "",
+    origem: "site",
+    status: "lead",
+    prioridade: "media",
+    temperatura: "frio",
+    responsavel: "João Corretor",
+    empreendimentoInteresse: "",
+  });
 
-function CRMProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(crmReducer, initialState);
+  const emailOk = useCallback((v: string) => emailValido(v), []);
+  const foneOk = useCallback((v: string) => telefoneValido(v), []);
+
+  if (!open) return null;
+
+  const salvar = () => {
+    if (!form.nome?.trim()) return window.alert("Informe o nome.");
+    if (!form.email || !emailOk(form.email)) return window.alert("Informe um e-mail válido.");
+    if (!form.telefone || !foneOk(form.telefone)) return window.alert("Informe um telefone válido.");
+
+    const novo: Cliente = {
+      id: crypto.randomUUID(),
+      nome: form.nome!,
+      email: form.email!,
+      telefone: form.telefone!,
+      origem: (form.origem || "site") as Origem,
+      status: (form.status || "lead") as Status,
+      prioridade: (form.prioridade || "media") as Prioridade,
+      temperatura: (form.temperatura || "frio") as Temperatura,
+      responsavel: form.responsavel || "João Corretor",
+      dataCriacao: new Date().toISOString().slice(0, 10),
+      empreendimentoInteresse: form.empreendimentoInteresse || undefined,
+      numeroContatos: 0,
+    };
+
+    dispatch({ type: "ADD_CLIENTE", payload: novo });
+    dispatch({ type: "CLOSE_MODAL" });
+  };
 
   return (
-    <CRMContext.Provider value={{ state, dispatch }}>
-      {children}
-    </CRMContext.Provider>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-lg">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Novo Lead</h3>
+            <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}>
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Nome *">
+              <input className="w-full border rounded-lg px-3 py-2" value={form.nome || ""} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}/>
+            </Field>
+            <Field label="E-mail *">
+              <input className="w-full border rounded-lg px-3 py-2" value={form.email || ""} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}/>
+            </Field>
+            <Field label="Telefone *">
+              <input className="w-full border rounded-lg px-3 py-2" value={form.telefone || ""} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))}/>
+            </Field>
+            <Field label="Origem">
+              <select className="w-full border rounded-lg px-3 py-2" value={form.origem} onChange={(e) => setForm((f) => ({ ...f, origem: e.target.value as Origem }))}>
+                {["site","indicacao","telemarketing","redes-sociais","evento","outros"].map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+            <Field label="Responsável">
+              <input className="w-full border rounded-lg px-3 py-2" value={form.responsavel || ""} onChange={(e) => setForm((f) => ({ ...f, responsavel: e.target.value }))}/>
+            </Field>
+            <Field label="Empreendimento (interesse)">
+              <input className="w-full border rounded-lg px-3 py-2" value={form.empreendimentoInteresse || ""} onChange={(e) => setForm((f) => ({ ...f, empreendimentoInteresse: e.target.value }))}/>
+            </Field>
+            <Field label="Prioridade">
+              <select className="w-full border rounded-lg px-3 py-2" value={form.prioridade} onChange={(e) => setForm((f) => ({ ...f, prioridade: e.target.value as Prioridade }))}>
+                <option value="baixa">baixa</option><option value="media">media</option><option value="alta">alta</option>
+              </select>
+            </Field>
+            <Field label="Temperatura">
+              <select className="w-full border rounded-lg px-3 py-2" value={form.temperatura} onChange={(e) => setForm((f) => ({ ...f, temperatura: e.target.value as Temperatura }))}>
+                <option value="frio">frio</option><option value="morno">morno</option><option value="quente">quente</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button className="px-4 py-2 border rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}>Cancelar</button>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg" onClick={salvar}>Salvar Lead</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function CrmComercial() {
+function ModalPipelines() {
+  const { state, dispatch } = useCRM();
+  const open = state.modalAtivo === "pipelines";
+  const atual = state.pipelines[state.pipelineAtivo];
+
+  const [nome, setNome] = useState(atual?.nome || "");
+  const [estagios, setEstagios] = useState<Status[]>(atual?.estagios || ALL_STATUS);
+
+  useEffect(() => {
+    if (open) {
+      const a = state.pipelines[state.pipelineAtivo];
+      setNome(a?.nome || "");
+      setEstagios(a?.estagios || ALL_STATUS);
+    }
+  }, [open, state.pipelineAtivo, state.pipelines]);
+
+  if (!open) return null;
+
+  const salvar = () => {
+    if (!nome.trim()) return;
+    dispatch({ type: "UPSERT_PIPELINE", payload: { id: state.pipelineAtivo, nome, estagios } });
+    dispatch({ type: "CLOSE_MODAL" });
+  };
+
+  const addEstagio = () => {
+    const restantes = ALL_STATUS.filter(s => !estagios.includes(s));
+    if (restantes[0]) setEstagios([...estagios, restantes[0]]);
+  };
+  const rmEstagio = (s: Status) => setEstagios(estagios.filter(e => e !== s));
+  const mv = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= estagios.length) return;
+    const arr = [...estagios];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setEstagios(arr);
+  };
+
   return (
-    <CRMProvider>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">CRM Comercial</h1>
-            <p className="mt-1 text-gray-600">
-              Gerencie seus leads e oportunidades de venda
-            </p>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-lg">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Gerenciar Pipeline</h3>
+            <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}><X className="w-6 h-6" /></button>
           </div>
-          
-          <div className="flex items-center space-x-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus className="w-4 h-4" />
-              Novo Lead
-            </button>
-            
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4" />
-              Exportar
-            </button>
+
+          <div className="space-y-4">
+            <Field label="Nome do pipeline">
+              <input className="w-full border rounded-lg px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
+            </Field>
+
+            <div>
+              <div className="text-sm font-medium mb-2">Estágios</div>
+              <div className="space-y-2">
+                {estagios.map((s, i) => (
+                  <div key={s} className="flex items-center gap-2">
+                    <span className="px-2 py-1 border rounded capitalize">{s}</span>
+                    <button className="px-2 py-1 border rounded text-xs" onClick={() => mv(i, -1)}>↑</button>
+                    <button className="px-2 py-1 border rounded text-xs" onClick={() => mv(i, +1)}>↓</button>
+                    <button className="px-2 py-1 border rounded text-xs text-red-600" onClick={() => rmEstagio(s)}>remover</button>
+                  </div>
+                ))}
+              </div>
+              <button className="mt-3 px-3 py-1.5 border rounded" onClick={addEstagio}>Adicionar estágio</button>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button className="px-4 py-2 border rounded-lg" onClick={() => dispatch({ type: "CLOSE_MODAL" })}>Cancelar</button>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg" onClick={salvar}>Salvar</button>
           </div>
         </div>
-
-        {/* Métricas Dashboard */}
-        <DashboardMetricas />
-
-        {/* Filtros */}
-        <FiltrosCRM />
-
-        {/* Tabela de Clientes */}
-        <TabelaClientes />
-
-        {/* Modal de Detalhes */}
-        <ModalDetalhesCliente />
       </div>
-    </CRMProvider>
+    </div>
   );
+}
+
+/* =========================================================
+   UI base
+========================================================= */
+
+function Field(props: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-medium text-gray-700 mb-1">{props.label}</span>
+      {props.children}
+    </label>
+  );
+}
+
+/* =========================================================
+   Página CRM — Chat First + abas
+========================================================= */
+
+export default function CRM() {
+  return (
+    <Provider>
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <HeaderCRM />
+        <MainView />
+        <DrawerDetalhes />
+        <ModalNovoLead />
+        <ModalMetas />
+        <ModalRelatorios />
+        <ModalPipelines />
+      </div>
+    </Provider>
+  );
+}
+
+function MainView() {
+  const { state } = useCRM();
+  if (state.view === "chat") return <Chat />;
+  if (state.view === "pipeline") return <Pipeline />;
+  return <Dashboard />;
 }

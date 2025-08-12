@@ -1,687 +1,720 @@
-import React, { useState } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import React, { useMemo, useState } from 'react'
+import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  UserGroupIcon,
-  BuildingOfficeIcon,
-  UserIcon,
-  BriefcaseIcon,
-  DocumentTextIcon,
-  EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  ArrowPathIcon,
-  PhoneIcon,
-  EnvelopeIcon,
-  MapPinIcon,
-  TagIcon,
-  ClipboardDocumentListIcon,
-  ChartBarIcon,
-  ChatBubbleOvalLeftEllipsisIcon,
-  BanknotesIcon
-} from '@heroicons/react/24/outline';
+  PlusIcon, MagnifyingGlassIcon, UserGroupIcon, UserIcon, BuildingOfficeIcon, EyeIcon, PencilIcon,
+  PhoneIcon, EnvelopeIcon, MapPinIcon, TagIcon, BanknotesIcon, PhotoIcon, TrashIcon
+} from '@heroicons/react/24/outline'
+import { useDropzone } from 'react-dropzone'
 
-// Types
-interface Endereco {
-  logradouro: string;
-  numero: string;
-  bairro: string;
-  cidade: string;
-  cep: string;
-  estado: string;
-}
+/* ===================== Tipos ===================== */
+type TipoPessoa = 'cliente' | 'lead' | 'fornecedor' | 'colaborador'
 
-interface Documento {
-  id: string;
-  tipo: string;
-  categoria: string;
-  nomeArquivo: string;
-  dataUpload: string;
-  tamanho: string;
-}
-
+interface Endereco { logradouro: string; numero: string; bairro: string; cidade: string; cep: string; estado: string }
+interface Documento { id: string; nomeArquivo: string; categoria: string; tipo: string; tamanho: string; dataUpload: string; url?: string }
 interface UnidadeAdquirida {
-  id: string;
-  empreendimento: string;
-  unidade: string;
-  valorCompra: number;
-  valorAtual: number;
-  status: 'quitado' | 'financiamento' | 'contrato' | 'pendente';
-  dataAquisicao: string;
+  id: string; empreendimentoId: string; empreendimentoNome: string; unidade: string;
+  valorCompra: number; valorAtual: number; status: 'quitado'|'financiamento'|'contrato'|'pendente'; dataAquisicao: string;
 }
+type TipoConta = 'corrente' | 'salario' | 'poupanca' | 'pagamento'
+interface DadosBancarios { bancoCodigo: string; bancoNome: string; agencia: string; conta: string; tipo: TipoConta; pix?: string }
 
 interface Pessoa {
   id: string;
-  tipo: 'cliente' | 'lead' | 'fornecedor' | 'colaborador';
+  tipo: TipoPessoa;
   pessoaFisica: boolean;
   nome: string;
   cpfCnpj: string;
-  telefone: string;
   email: string;
+  telefone: string;
   endereco: Endereco;
+  status: 'ativo'|'inativo'|'suspenso';
   tags: string[];
   observacoes: string;
+  dataInclusao: string; dataAtualizacao: string;
+
+  avatarUrl?: string;
+
+  // PF / PJ
+  dataNascimento?: string;           // PF
+  razaoSocial?: string;              // PJ
+  nomeFantasia?: string;             // PJ
+
+  // Bancos
+  dadosBancarios?: DadosBancarios;
+
+  // Documentos (genérico para qualquer pessoa)
   documentos: Documento[];
-  dataInclusao: string;
-  dataAtualizacao: string;
-  status: 'ativo' | 'inativo' | 'suspenso';
-  
-  // Campos específicos por tipo
+
+  // Cliente
   unidadesAdquiridas?: UnidadeAdquirida[];
-  produtosServicos?: string;
-  categoria?: string;
-  contratosPrestacao?: string[];
-  advertencias?: Documento[];
-  atestadosMedicos?: Documento[];
+
+  // Colaborador
+  dataAdmissao?: string;
+  vencimentoFerias?: string;         // calculado
+  emFerias?: boolean;
+  inicioFerias?: string;
+  fimFerias?: string;
+  proximaFerias?: string;            // calculado
 }
 
-// Mock data
+/* ===================== Utilidades ===================== */
+const addMonths = (isoDate: string, months: number) => {
+  if (!isoDate) return ''
+  const d = new Date(isoDate)
+  d.setMonth(d.getMonth() + months)
+  const yyyy = d.getFullYear()
+  const mm = `${d.getMonth() + 1}`.padStart(2, '0')
+  const dd = `${d.getDate()}`.padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+const fmtMoney = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+function isEmail(val: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim()) }
+function onlyDigits(s: string) { return s.replace(/\D/g, '') }
+function validaCPF(cpfRaw: string) {
+  const cpf = onlyDigits(cpfRaw); if (cpf.length !== 11 || /^(.)\1+$/.test(cpf)) return false
+  let s = 0; for (let i = 0; i < 9; i++) s += parseInt(cpf[i]) * (10 - i)
+  let d1 = (s * 10) % 11; if (d1 === 10) d1 = 0; if (d1 !== parseInt(cpf[9])) return false
+  s = 0; for (let i = 0; i < 10; i++) s += parseInt(cpf[i]) * (11 - i)
+  let d2 = (s * 10) % 11; if (d2 === 10) d2 = 0; return d2 === parseInt(cpf[10])
+}
+function validaCNPJ(cnpjRaw: string) {
+  const c = onlyDigits(cnpjRaw); if (c.length !== 14 || /^(.)\1+$/.test(c)) return false
+  const calc = (b: number) => {
+    let i = b - 7, s = 0
+    for (let j = 0; j < b; j++) { s += parseInt(c[j]) * i; i = i === 2 ? 9 : i - 1 }
+    const d = 11 - (s % 11); return d > 9 ? 0 : d
+  }
+  return calc(12) === parseInt(c[12]) && calc(13) === parseInt(c[13])
+}
+function validaCpfCnpj(doc: string, pf: boolean) { return pf ? validaCPF(doc) : validaCNPJ(doc) }
+
+/* ===================== Mock Empreendimentos (linkagem) ===================== */
+const empreendimentosOptions = [
+  { id: 'emp1', nome: 'Residencial Solar das Flores' },
+  { id: 'emp2', nome: 'Comercial Business Center' },
+]
+
+/* ===================== Bancos (código Febraban principais) ===================== */
+const BANCOS = [
+  { codigo: '001', nome: 'BANCO DO BRASIL' },
+  { codigo: '033', nome: 'SANTANDER' },
+  { codigo: '104', nome: 'CAIXA ECON. FEDERAL' },
+  { codigo: '237', nome: 'BRADESCO' },
+  { codigo: '341', nome: 'ITAÚ' },
+  { codigo: '399', nome: 'HSBC' },
+  { codigo: '422', nome: 'SAFRA' },
+  { codigo: '453', nome: 'RURAL' },
+  { codigo: '623', nome: 'PAN' },
+  { codigo: '748', nome: 'SICREDI' },
+  { codigo: '756', nome: 'SICOOB' },
+]
+
+/* ===================== Mock Pessoas ===================== */
 const mockPessoas: Pessoa[] = [
   {
-    id: '1',
-    tipo: 'cliente',
-    pessoaFisica: true,
-    nome: 'João Silva Santos',
-    cpfCnpj: '123.456.789-00',
-    telefone: '(11) 99999-9999',
-    email: 'joao.silva@email.com',
-    endereco: {
-      logradouro: 'Rua das Palmeiras',
-      numero: '100',
-      bairro: 'Vila Madalena',
-      cidade: 'São Paulo',
-      cep: '05435-000',
-      estado: 'SP'
-    },
-    tags: ['vip', 'investidor'],
-    observacoes: 'Cliente há 5 anos. Comprou 3 unidades.',
-    documentos: [
-      {
-        id: '1',
-        tipo: 'RG',
-        categoria: 'Documentação Pessoal',
-        nomeArquivo: 'rg_joao.pdf',
-        dataUpload: '2024-01-15',
-        tamanho: '2.1 MB'
-      }
-    ],
-    dataInclusao: '2024-01-10',
-    dataAtualizacao: '2024-07-20',
-    status: 'ativo',
+    id: '1', tipo: 'cliente', pessoaFisica: true,
+    nome: 'João Silva Santos', cpfCnpj: '123.456.789-09', email: 'joao@email.com', telefone: '(11) 99999-9999',
+    endereco: { logradouro: 'Rua das Palmeiras', numero: '100', bairro: 'Vila Madalena', cidade: 'São Paulo', cep: '05435-000', estado: 'SP' },
+    status: 'ativo', tags: ['vip'], observacoes: '', dataInclusao: '2024-01-10', dataAtualizacao: '2024-07-20',
+    documentos: [],
+    dadosBancarios: { bancoCodigo: '341', bancoNome: 'ITAÚ', agencia: '1234', conta: '12345-6', tipo: 'corrente' },
     unidadesAdquiridas: [
-      {
-        id: '1',
-        empreendimento: 'Residencial Jardim',
-        unidade: 'Apto 101 - Bloco A',
-        valorCompra: 350000,
-        valorAtual: 420000,
-        status: 'quitado',
-        dataAquisicao: '2023-03-15'
-      }
-    ]
+      { id: 'u1', empreendimentoId: 'emp1', empreendimentoNome: 'Residencial Solar das Flores', unidade: 'Apto 101 - Bloco A', valorCompra: 350000, valorAtual: 420000, status: 'quitado', dataAquisicao: '2023-03-15' }
+    ],
+    dataNascimento: '1988-05-10'
   },
   {
-    id: '2',
-    tipo: 'lead',
-    pessoaFisica: true,
-    nome: 'Maria Oliveira Costa',
-    cpfCnpj: '987.654.321-00',
-    telefone: '(11) 98888-8888',
-    email: 'maria.costa@email.com',
-    endereco: {
-      logradouro: 'Av. Paulista',
-      numero: '1000',
-      bairro: 'Bela Vista',
-      cidade: 'São Paulo',
-      cep: '01310-100',
-      estado: 'SP'
-    },
-    tags: ['quente', 'primeiro_imovel'],
-    observacoes: 'Interessada em apartamento 2 dormitórios. Orçamento até R$ 400k.',
+    id: '4', tipo: 'colaborador', pessoaFisica: true,
+    nome: 'Ana Souza', cpfCnpj: '295.379.610-06', email: 'ana@empresa.com', telefone: '(48) 99999-2222',
+    endereco: { logradouro: 'Rua A', numero: '55', bairro: 'Centro', cidade: 'Florianópolis', cep: '88010-120', estado: 'SC' },
+    status: 'ativo', tags: ['engenharia'], observacoes: '', dataInclusao: '2023-11-01', dataAtualizacao: '2025-01-20',
     documentos: [],
-    dataInclusao: '2024-07-15',
-    dataAtualizacao: '2024-07-25',
-    status: 'ativo'
+    dadosBancarios: { bancoCodigo: '001', bancoNome: 'BANCO DO BRASIL', agencia: '0001', conta: '654321-1', tipo: 'salario', pix: '48-99999-2222' },
+    dataAdmissao: '2023-11-01',
+    vencimentoFerias: addMonths('2023-11-01', 12),
+    proximaFerias: addMonths('2023-11-01', 12),
+    emFerias: false
   },
-  {
-    id: '3',
-    tipo: 'fornecedor',
-    pessoaFisica: false,
-    nome: 'Construtora ABC Ltda',
-    cpfCnpj: '12.345.678/0001-90',
-    telefone: '(11) 3333-3333',
-    email: 'contato@construtorabc.com',
-    endereco: {
-      logradouro: 'Rua Comercial',
-      numero: '500',
-      bairro: 'Centro',
-      cidade: 'São Paulo',
-      cep: '01000-000',
-      estado: 'SP'
-    },
-    tags: ['construcao', 'parceiro'],
-    observacoes: 'Fornecedor de materiais de construção. Parceiro há 8 anos.',
-    documentos: [],
-    dataInclusao: '2024-02-20',
-    dataAtualizacao: '2024-07-22',
-    status: 'ativo',
-    produtosServicos: 'Materiais de construção, Mão de obra especializada',
-    categoria: 'Construção Civil'
-  }
-];
+]
 
-const Pessoas: React.FC = () => {
-  return (
-    <Routes>
-      <Route index element={<PessoasOverview />} />
-      <Route path="clientes" element={<PessoasList tipo="cliente" />} />
-      <Route path="leads" element={<PessoasList tipo="lead" />} />
-      <Route path="fornecedores" element={<PessoasList tipo="fornecedor" />} />
-      <Route path="colaboradores" element={<PessoasList tipo="colaborador" />} />
-      <Route path=":tipo/novo" element={<PessoaForm />} />
-      <Route path=":tipo/:id/editar" element={<PessoaForm />} />
-      <Route path=":tipo/:id" element={<PessoaDetails />} />
-    </Routes>
-  );
-};
+/* ===================== Página ===================== */
+const Pessoas: React.FC = () => (
+  <Routes>
+    <Route index element={<PessoasOverview />} />
+    <Route path="clientes" element={<PessoasList tipo="cliente" />} />
+    <Route path="leads" element={<PessoasList tipo="lead" />} />
+    <Route path="fornecedores" element={<PessoasList tipo="fornecedor" />} />
+    <Route path="colaboradores" element={<PessoasList tipo="colaborador" />} />
+    <Route path=":tipo/novo" element={<PessoaForm />} />
+    <Route path=":tipo/:id/editar" element={<PessoaForm />} />
+    <Route path=":tipo/:id" element={<PessoaDetails />} />
+  </Routes>
+)
+export default Pessoas
 
-// Overview do módulo
-const PessoasOverview: React.FC = () => {
-  const navigate = useNavigate();
-  const [pessoas] = useState<Pessoa[]>(mockPessoas);
-
-  const estatisticas = {
+/* ===================== Overview ===================== */
+function PessoasOverview() {
+  const navigate = useNavigate()
+  const pessoas = mockPessoas
+  const estat = {
     clientes: pessoas.filter(p => p.tipo === 'cliente').length,
     leads: pessoas.filter(p => p.tipo === 'lead').length,
     fornecedores: pessoas.filter(p => p.tipo === 'fornecedor').length,
-    colaboradores: pessoas.filter(p => p.tipo === 'colaborador').length
-  };
-
+    colaboradores: pessoas.filter(p => p.tipo === 'colaborador').length,
+  }
   const cards = [
-    {
-      titulo: 'Clientes',
-      valor: estatisticas.clientes,
-      href: '/pessoas/clientes',
-      icon: UserGroupIcon,
-      cor: 'bg-blue-500',
-      corFundo: 'bg-blue-50',
-      descricao: 'Proprietários e compradores'
-    },
-    {
-      titulo: 'Leads',
-      valor: estatisticas.leads,
-      href: '/pessoas/leads',
-      icon: UserIcon,
-      cor: 'bg-green-500',
-      corFundo: 'bg-green-50',
-      descricao: 'Prospects em negociação'
-    },
-    {
-      titulo: 'Fornecedores',
-      valor: estatisticas.fornecedores,
-      href: '/pessoas/fornecedores',
-      icon: BriefcaseIcon,
-      cor: 'bg-purple-500',
-      corFundo: 'bg-purple-50',
-      descricao: 'Parceiros comerciais'
-    },
-    {
-      titulo: 'Colaboradores',
-      valor: estatisticas.colaboradores,
-      href: '/pessoas/colaboradores',
-      icon: BuildingOfficeIcon,
-      cor: 'bg-orange-500',
-      corFundo: 'bg-orange-50',
-      descricao: 'Equipe e prestadores'
-    }
-  ];
-
+    { titulo: 'Clientes', valor: estat.clientes, href: '/pessoas/clientes', icon: UserGroupIcon, cor: 'bg-blue-50', icor: 'text-blue-600' },
+    { titulo: 'Leads', valor: estat.leads, href: '/pessoas/leads', icon: UserIcon, cor: 'bg-green-50', icor: 'text-green-600' },
+    { titulo: 'Fornecedores', valor: estat.fornecedores, href: '/pessoas/fornecedores', icon: BuildingOfficeIcon, cor: 'bg-purple-50', icor: 'text-purple-600' },
+    { titulo: 'Colaboradores', valor: estat.colaboradores, href: '/pessoas/colaboradores', icon: TagIcon, cor: 'bg-amber-50', icor: 'text-amber-600' },
+  ]
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Módulo Pessoas</h1>
-          <p className="text-gray-600">Gestão centralizada de clientes, leads, fornecedores e colaboradores</p>
+          <h1 className="text-2xl font-bold">Pessoas</h1>
+          <p className="text-gray-600">Cadastros centrais do ERP</p>
         </div>
       </div>
-
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map((card) => {
-          const IconComponent = card.icon;
-          return (
-            <button
-              key={card.titulo}
-              onClick={() => navigate(card.href)}
-              className="card card-hover p-6 text-left"
-            >
-              <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${card.corFundo}`}>
-                  <IconComponent className={`h-6 w-6 text-white`} style={{ color: card.cor.replace('bg-', '').replace('-500', '') }} />
-                </div>
-                <div className="ml-4 flex-1">
-                  <p className="text-sm font-medium text-gray-600">{card.titulo}</p>
-                  <p className="text-2xl font-bold text-gray-900">{card.valor}</p>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {cards.map((c, i) => (
+          <button key={i} onClick={() => navigate(c.href)} className="bg-white border rounded-lg p-5 text-left hover:shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600">{c.titulo}</p>
+                <p className="text-2xl font-bold">{c.valor}</p>
               </div>
-              <p className="text-sm text-gray-500 mt-3">{card.descricao}</p>
-            </button>
-          );
-        })}
+              <div className={`${c.cor} p-3 rounded-lg`}><c.icon className={`${c.icor} w-7 h-7`} /></div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ===================== Lista ===================== */
+function PessoasList({ tipo }: { tipo: TipoPessoa }) {
+  const navigate = useNavigate()
+  const [busca, setBusca] = useState('')
+  const pessoas = useMemo(
+    () => mockPessoas.filter(p => p.tipo === tipo && p.nome.toLowerCase().includes(busca.toLowerCase())),
+    [tipo, busca]
+  )
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold capitalize">{tipo}</h1>
+          <p className="text-gray-600">Gerencie {tipo === 'colaborador' ? 'colaboradores' : `os ${tipo}s`}</p>
+        </div>
+        <button onClick={() => navigate(`/pessoas/${tipo}/novo`)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <PlusIcon className="w-5 h-5" /> Novo cadastro
+        </button>
       </div>
 
-      {/* Ações Rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
-          <div className="space-y-3">
-            <button
-              onClick={() => navigate('/pessoas/clientes/novo')}
-              className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-            >
-              <span className="text-blue-700 font-medium">Novo Cliente</span>
-              <PlusIcon className="h-5 w-5 text-blue-500" />
-            </button>
-            <button
-              onClick={() => navigate('/pessoas/leads/novo')}
-              className="w-full flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-            >
-              <span className="text-green-700 font-medium">Novo Lead</span>
-              <PlusIcon className="h-5 w-5 text-green-500" />
-            </button>
-            <button
-              onClick={() => navigate('/pessoas/fornecedores/novo')}
-              className="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-            >
-              <span className="text-purple-700 font-medium">Novo Fornecedor</span>
-              <PlusIcon className="h-5 w-5 text-purple-500" />
-            </button>
-          </div>
+      <div className="bg-white border rounded-lg p-4">
+        <div className="relative max-w-md">
+          <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome…"
+            className="w-full pl-10 pr-3 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500" />
         </div>
 
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Integrações</h3>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex items-center">
-              <BuildingOfficeIcon className="h-4 w-4 mr-2" />
-              <span>Empreendimentos: Unidades adquiridas por clientes</span>
-            </div>
-            <div className="flex items-center">
-              <ChatBubbleOvalLeftEllipsisIcon className="h-4 w-4 mr-2" />
-              <span>CRM: Conversão de leads para clientes</span>
-            </div>
-            <div className="flex items-center">
-              <BanknotesIcon className="h-4 w-4 mr-2" />
-              <span>Financeiro: Pagamentos e contratos</span>
-            </div>
-            <div className="flex items-center">
-              <DocumentTextIcon className="h-4 w-4 mr-2" />
-              <span>Jurídico: Contratos e documentação</span>
-            </div>
-          </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr><th className="py-2">Nome</th><th className="py-2">Documento</th><th className="py-2">Telefone</th><th className="py-2">Email</th><th className="py-2"></th></tr>
+            </thead>
+            <tbody className="divide-y">
+              {pessoas.map(p => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="py-2">{p.nome}</td>
+                  <td className="py-2">{p.cpfCnpj}</td>
+                  <td className="py-2">{p.telefone}</td>
+                  <td className="py-2">{p.email}</td>
+                  <td className="py-2 text-right">
+                    <button onClick={() => navigate(`/pessoas/${p.tipo}/${p.id}`)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-lg">
+                      <EyeIcon className="w-4 h-4" /> Ver
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {pessoas.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-gray-500">Nenhum registro</td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
-  );
-};
-
-// Lista de pessoas por tipo
-interface PessoasListProps {
-  tipo: 'cliente' | 'lead' | 'fornecedor' | 'colaborador';
+  )
 }
 
-const PessoasList: React.FC<PessoasListProps> = ({ tipo }) => {
-  const navigate = useNavigate();
-  const [pessoas, setPessoas] = useState<Pessoa[]>(mockPessoas.filter(p => p.tipo === tipo));
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
+/* ===================== Formulário ===================== */
+function PessoaForm() {
+  const { tipo } = useParams<{ tipo: TipoPessoa }>()
+  const navigate = useNavigate()
 
-  const filteredPessoas = pessoas.filter(pessoa => {
-    const matchesSearch = 
-      pessoa.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pessoa.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pessoa.cpfCnpj.includes(searchTerm) ||
-      pessoa.telefone.includes(searchTerm);
-    
-    const matchesStatus = statusFilter === 'todos' || pessoa.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const initial: Pessoa = {
+    id: crypto.randomUUID(),
+    tipo: (tipo as TipoPessoa) || 'cliente',
+    pessoaFisica: true,
+    nome: '',
+    cpfCnpj: '',
+    email: '',
+    telefone: '',
+    endereco: { logradouro: '', numero: '', bairro: '', cidade: '', cep: '', estado: '' },
+    status: 'ativo',
+    tags: [],
+    observacoes: '',
+    dataInclusao: new Date().toISOString().slice(0, 10),
+    dataAtualizacao: new Date().toISOString().slice(0, 10),
+    documentos: [],
+    avatarUrl: '',
+    dadosBancarios: { bancoCodigo: '', bancoNome: '', agencia: '', conta: '', tipo: 'corrente', pix: '' },
+    unidadesAdquiridas: [],
+    dataNascimento: ''
+  }
 
-  const getTipoLabel = (tipo: string) => {
-    const labels = {
-      cliente: 'Clientes',
-      lead: 'Leads',
-      fornecedor: 'Fornecedores',
-      colaborador: 'Colaboradores'
-    };
-    return labels[tipo as keyof typeof labels] || tipo;
-  };
+  const [form, setForm] = useState<Pessoa>(initial)
+  const [errors, setErrors] = useState<{ email?: string; doc?: string }>({})
 
-  const formatCpfCnpj = (cpfCnpj: string, pessoaFisica: boolean) => {
-    if (pessoaFisica) {
-      return cpfCnpj.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.***.**$4');
-    } else {
-      return cpfCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.***.***/***$5');
+  // avatar dropzone
+  const avatarDrop = useDropzone({
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg'] },
+    multiple: false,
+    onDrop: (files) => {
+      const f = files[0]; if (!f) return
+      const url = URL.createObjectURL(f)
+      setForm({ ...form, avatarUrl: url })
     }
-  };
+  })
 
-  const converterParaCliente = (leadId: string) => {
-    const lead = pessoas.find(p => p.id === leadId);
-    if (lead && lead.tipo === 'lead') {
-      const novoCliente = { ...lead, tipo: 'cliente' as const, unidadesAdquiridas: [] };
-      // Aqui seria a integração real com a API
-      console.log('Convertendo lead para cliente:', novoCliente);
-      setPessoas(prev => prev.filter(p => p.id !== leadId));
-      alert('Lead convertido para cliente com sucesso!');
+  // documentos dropzone
+  const docDrop = useDropzone({
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'image/*': ['.png', '.jpg', '.jpeg']
+    },
+    multiple: true,
+    onDrop: (files) => {
+      const novos = files.map(f => ({
+        id: crypto.randomUUID(),
+        nomeArquivo: f.name,
+        categoria: form.tipo === 'colaborador' ? 'Documento do Colaborador' : 'Geral',
+        tipo: f.type || 'arquivo',
+        tamanho: `${(f.size / 1024 / 1024).toFixed(2)} MB`,
+        dataUpload: new Date().toISOString().slice(0, 10),
+        url: URL.createObjectURL(f)
+      }) as Documento)
+      setForm({ ...form, documentos: [...form.documentos, ...novos] })
     }
-  };
+  })
+
+  function validate() {
+    const errs: { email?: string; doc?: string } = {}
+    if (form.email && !isEmail(form.email)) errs.email = 'Email inválido'
+    if (form.cpfCnpj && !validaCpfCnpj(form.cpfCnpj, form.pessoaFisica)) errs.doc = form.pessoaFisica ? 'CPF inválido' : 'CNPJ inválido'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!validate()) return
+    // salvar (mock)
+    navigate(`/pessoas/${form.tipo}`)
+  }
+
+  // férias automáticas
+  const isColab = form.tipo === 'colaborador'
+  const isCliente = form.tipo === 'cliente'
+  const isPF = form.pessoaFisica
+
+  function recomputeFerias(from: string) {
+    if (!from) return
+    const prox = addMonths(from, 12)
+    setForm(f => ({ ...f, vencimentoFerias: prox, proximaFerias: prox }))
+  }
+
+  function marcarInicioFerias() {
+    const hoje = new Date().toISOString().slice(0, 10)
+    setForm(f => ({ ...f, emFerias: true, inicioFerias: hoje, fimFerias: addMonths(hoje, 0) })) // fim será preenchido ao retornar
+  }
+  function marcarRetornoFerias() {
+    const hoje = new Date().toISOString().slice(0, 10)
+    // próxima férias contam 12 meses após o retorno
+    const prox = addMonths(hoje, 12)
+    setForm(f => ({ ...f, emFerias: false, fimFerias: hoje, proximaFerias: prox, vencimentoFerias: prox }))
+  }
+
+  // editar/remoção de documento
+  const removeDoc = (id: string) => setForm({ ...form, documentos: form.documentos.filter(d => d.id !== id) })
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Novo cadastro — {form.tipo}</h1>
+          <p className="text-gray-600">Preencha os dados abaixo</p>
+        </div>
+        <button type="button" onClick={() => navigate(`/pessoas/${form.tipo}`)} className="border px-4 py-2 rounded-lg">Cancelar</button>
+      </div>
+
+      {/* Perfil + Avatar */}
+      <div className="bg-white border rounded-lg p-6 space-y-4">
+        <div className="flex items-center gap-4">
+          <div {...avatarDrop.getRootProps()} className="w-20 h-20 rounded-full border-2 border-dashed grid place-items-center cursor-pointer overflow-hidden">
+            <input {...avatarDrop.getInputProps()} />
+            {form.avatarUrl ? <img src={form.avatarUrl} className="w-full h-full object-cover" /> : <div className="text-center text-xs text-gray-500 flex flex-col items-center"><PhotoIcon className="w-6 h-6 text-gray-400" />Foto</div>}
+          </div>
+
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+            <label className="md:col-span-2">
+              <span className="text-sm text-gray-700">Nome *</span>
+              <input required className="w-full border rounded-lg px-3 py-2" value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})}/>
+            </label>
+            <label>
+              <span className="text-sm text-gray-700">Pessoa Física?</span>
+              <select className="w-full border rounded-lg px-3 py-2" value={form.pessoaFisica ? '1':'0'}
+                onChange={e=>setForm({...form, pessoaFisica: e.target.value==='1'})}>
+                <option value="1">Sim (CPF)</option>
+                <option value="0">Não (CNPJ)</option>
+              </select>
+            </label>
+            <label>
+              <span className="text-sm text-gray-700">{isPF ? 'CPF' : 'CNPJ'} *</span>
+              <input required className="w-full border rounded-lg px-3 py-2" value={form.cpfCnpj} onChange={e=>setForm({...form, cpfCnpj:e.target.value})}/>
+              {errors.doc && <span className="text-xs text-red-600">{errors.doc}</span>}
+            </label>
+          </div>
+        </div>
+
+        {/* Campos PF / PJ */}
+        {isPF ? (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <label><span className="text-sm">Data de Nascimento</span>
+              <input type="date" className="w-full border rounded-lg px-3 py-2" value={form.dataNascimento ?? ''} onChange={e=>setForm({...form, dataNascimento: e.target.value})}/></label>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <label className="md:col-span-2"><span className="text-sm">Razão Social</span>
+              <input className="w-full border rounded-lg px-3 py-2" value={form.razaoSocial ?? ''} onChange={e=>setForm({...form, razaoSocial: e.target.value})}/></label>
+            <label className="md:col-span-2"><span className="text-sm">Nome Fantasia</span>
+              <input className="w-full border rounded-lg px-3 py-2" value={form.nomeFantasia ?? ''} onChange={e=>setForm({...form, nomeFantasia: e.target.value})}/></label>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <label><span className="text-sm">Telefone</span>
+            <input className="w-full border rounded-lg px-3 py-2" value={form.telefone} onChange={e=>setForm({...form, telefone:e.target.value})}/></label>
+          <label className="md:col-span-2"><span className="text-sm">Email *</span>
+            <input required className="w-full border rounded-lg px-3 py-2" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/>
+            {errors.email && <span className="text-xs text-red-600">{errors.email}</span>}
+          </label>
+          <label><span className="text-sm">Tags (separe por vírgula)</span>
+            <input className="w-full border rounded-lg px-3 py-2" value={form.tags.join(', ')} onChange={e=>setForm({...form, tags:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}/></label>
+        </div>
+      </div>
+
+      {/* Endereço */}
+      <div className="bg-white border rounded-lg p-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label className="md:col-span-2"><span className="text-sm">Logradouro</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.logradouro} onChange={e=>setForm({...form, endereco:{...form.endereco, logradouro:e.target.value}})}/></label>
+        <label><span className="text-sm">Número</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.numero} onChange={e=>setForm({...form, endereco:{...form.endereco, numero:e.target.value}})}/></label>
+        <label><span className="text-sm">Bairro</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.bairro} onChange={e=>setForm({...form, endereco:{...form.endereco, bairro:e.target.value}})}/></label>
+        <label><span className="text-sm">Cidade</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.cidade} onChange={e=>setForm({...form, endereco:{...form.endereco, cidade:e.target.value}})}/></label>
+        <label><span className="text-sm">Estado</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.estado} onChange={e=>setForm({...form, endereco:{...form.endereco, estado:e.target.value}})}/></label>
+        <label><span className="text-sm">CEP</span>
+          <input className="w-full border rounded-lg px-3 py-2" value={form.endereco.cep} onChange={e=>setForm({...form, endereco:{...form.endereco, cep:e.target.value}})}/></label>
+      </div>
+
+      {/* Dados Bancários */}
+      <div className="bg-white border rounded-lg p-6">
+        <h3 className="font-semibold mb-3 flex items-center gap-2"><BanknotesIcon className="w-5 h-5"/> Dados bancários</h3>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <label className="md:col-span-2 text-sm">Banco (código)
+            <select className="w-full border rounded-lg px-3 py-2"
+              value={form.dadosBancarios?.bancoCodigo ?? ''}
+              onChange={e=>{
+                const sel = BANCOS.find(b=>b.codigo===e.target.value)
+                setForm({...form, dadosBancarios:{ ...(form.dadosBancarios ?? { bancoCodigo:'', bancoNome:'', agencia:'', conta:'', tipo:'corrente', pix:'' }),
+                  bancoCodigo: sel?.codigo ?? '', bancoNome: sel?.nome ?? '' }})
+              }}>
+              <option value="">Selecione…</option>
+              {BANCOS.map(b=><option key={b.codigo} value={b.codigo}>{b.codigo} — {b.nome}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Agência
+            <input className="w-full border rounded-lg px-3 py-2" value={form.dadosBancarios?.agencia ?? ''} onChange={e=>setForm({...form, dadosBancarios:{ ...(form.dadosBancarios as DadosBancarios), agencia:e.target.value }})}/></label>
+          <label className="text-sm">Conta
+            <input className="w-full border rounded-lg px-3 py-2" value={form.dadosBancarios?.conta ?? ''} onChange={e=>setForm({...form, dadosBancarios:{ ...(form.dadosBancarios as DadosBancarios), conta:e.target.value }})}/></label>
+          <label className="text-sm">Tipo de conta
+            <select className="w-full border rounded-lg px-3 py-2" value={form.dadosBancarios?.tipo ?? 'corrente'}
+              onChange={e=>setForm({...form, dadosBancarios:{ ...(form.dadosBancarios as DadosBancarios), tipo: e.target.value as TipoConta }})}>
+              <option value="corrente">Conta Corrente</option>
+              <option value="salario">Conta Salário</option>
+              <option value="poupanca">Conta Poupança</option>
+              <option value="pagamento">Conta de Pagamento</option>
+            </select>
+          </label>
+          <label className="text-sm">PIX
+            <input className="w-full border rounded-lg px-3 py-2" value={form.dadosBancarios?.pix ?? ''} onChange={e=>setForm({...form, dadosBancarios:{ ...(form.dadosBancarios as DadosBancarios), pix:e.target.value }})}/></label>
+        </div>
+      </div>
+
+      {/* Documentos (Drag & Drop) */}
+      <div className="bg-white border rounded-lg p-6 space-y-4">
+        <h3 className="font-semibold">Documentos</h3>
+        <div {...docDrop.getRootProps()} className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50">
+          <input {...docDrop.getInputProps()} />
+          <p className="text-sm text-gray-600">Arraste arquivos aqui ou <span className="text-blue-600 underline">clique para enviar</span></p>
+          <p className="text-xs text-gray-500 mt-1">Aceita: .pdf .doc .docx .xls .xlsx .png .jpg</p>
+        </div>
+        {form.documentos.length > 0 && (
+          <ul className="divide-y">
+            {form.documentos.map(d=>(
+              <li key={d.id} className="py-2 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">{d.nomeArquivo}</p>
+                  <p className="text-xs text-gray-500">{d.categoria} • {d.tamanho} • {d.dataUpload}</p>
+                </div>
+                <button type="button" onClick={()=>removeDoc(d.id)} className="text-red-600 text-sm inline-flex items-center gap-1">
+                  <TrashIcon className="w-4 h-4" /> Remover
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Unidades / Contratos (Cliente) */}
+      {isCliente && (
+        <div className="bg-white border rounded-lg p-6">
+          <h3 className="font-semibold mb-3">Contratos / Unidades</h3>
+          <UnidadesEditor unidades={form.unidadesAdquiridas ?? []} onChange={(u)=>setForm({...form, unidadesAdquiridas:u})} />
+        </div>
+      )}
+
+      {/* Dados do Colaborador + Férias */}
+      {isColab && (
+        <div className="bg-white border rounded-lg p-6 space-y-4">
+          <h3 className="font-semibold">Dados do colaborador</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label><span className="text-sm">Data de admissão</span>
+              <input type="date" className="w-full border rounded-lg px-3 py-2" value={form.dataAdmissao ?? ''}
+                onChange={e=>{ const dt = e.target.value; setForm({...form, dataAdmissao: dt}); recomputeFerias(dt) }}/></label>
+            <label><span className="text-sm">Vencimento de férias</span>
+              <input type="date" className="w-full border rounded-lg px-3 py-2" value={form.vencimentoFerias ?? ''} readOnly/></label>
+            <label><span className="text-sm">Próximas férias</span>
+              <input type="date" className="w-full border rounded-lg px-3 py-2" value={form.proximaFerias ?? ''} readOnly/></label>
+          </div>
+          <div className="flex items-center gap-3">
+            {!form.emFerias ? (
+              <button type="button" onClick={marcarInicioFerias} className="px-3 py-1.5 border rounded-lg">Iniciar férias</button>
+            ) : (
+              <button type="button" onClick={marcarRetornoFerias} className="px-3 py-1.5 border rounded-lg">Marcar retorno</button>
+            )}
+            <span className={`text-sm ${form.emFerias ? 'text-green-700' : 'text-gray-600'}`}>
+              {form.emFerias ? `Em férias desde ${form.inicioFerias}` : 'Não está de férias'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3">
+        <button type="button" onClick={() => navigate(`/pessoas/${form.tipo}`)} className="px-4 py-2 border rounded-lg">Cancelar</button>
+        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar</button>
+      </div>
+    </form>
+  )
+}
+
+/* ===================== Detalhes ===================== */
+function PessoaDetails() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const pessoa = mockPessoas.find(p => p.id === id)
+  if (!pessoa) return <div className="text-center text-gray-600">Registro não encontrado</div>
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{getTipoLabel(tipo)}</h1>
-          <p className="text-gray-600">Gerencie todos os {getTipoLabel(tipo).toLowerCase()}</p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => navigate(`/pessoas/${tipo}/novo`)}
-            className="btn-primary"
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Novo {getTipoLabel(tipo).slice(0, -1)}
-          </button>
-          <button
-            onClick={() => navigate('/pessoas')}
-            className="btn-outline"
-          >
-            Voltar
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="card p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nome, email, CPF/CNPJ..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-input pl-10"
-            />
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-gray-100 grid place-items-center overflow-hidden">
+            {pessoa.avatarUrl ? <img src={pessoa.avatarUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-gray-400" />}
           </div>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="form-input"
-          >
-            <option value="todos">Todos os Status</option>
-            <option value="ativo">Ativo</option>
-            <option value="inativo">Inativo</option>
-            <option value="suspenso">Suspenso</option>
-          </select>
-
-          {/* Clear Filters */}
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setStatusFilter('todos');
-            }}
-            className="btn-outline"
-          >
-            Limpar Filtros
+          <div>
+            <h1 className="text-2xl font-bold">{pessoa.nome}</h1>
+            <p className="text-gray-600">{pessoa.tipo} • {pessoa.pessoaFisica ? 'CPF' : 'CNPJ'} {pessoa.cpfCnpj}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => navigate(`/pessoas/${pessoa.tipo}/${pessoa.id}/editar`)} className="px-3 py-1.5 border rounded-lg flex items-center gap-1">
+            <PencilIcon className="w-4 h-4" /> Editar
           </button>
+          <button onClick={() => navigate(`/pessoas/${pessoa.tipo}`)} className="px-3 py-1.5 border rounded-lg">Voltar</button>
         </div>
       </div>
 
-      {/* Results Summary */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600">
-          Mostrando {filteredPessoas.length} de {pessoas.length} {getTipoLabel(tipo).toLowerCase()}
-        </p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Quick title="Telefone" value={pessoa.telefone} icon={PhoneIcon}/>
+        <Quick title="Email" value={pessoa.email} icon={EnvelopeIcon}/>
+        <Quick title="Local" value={`${pessoa.endereco.cidade} - ${pessoa.endereco.estado}`} icon={MapPinIcon}/>
+        <Quick title="Status" value={pessoa.status} icon={TagIcon}/>
       </div>
 
-      {/* Lista em Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredPessoas.map((pessoa) => (
-          <div key={pessoa.id} className="card card-hover">
-            <div className="p-6">
-              {/* Header do Card */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center mr-3">
-                    <span className="text-sm font-medium text-gray-700">
-                      {pessoa.nome.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{pessoa.nome}</h3>
-                    <p className="text-sm text-gray-500">
-                      {pessoa.pessoaFisica ? 'Pessoa Física' : 'Pessoa Jurídica'}
-                    </p>
-                  </div>
+      {/* Documentos */}
+      <div className="bg-white border rounded-lg p-6">
+        <h3 className="font-semibold mb-2">Documentos</h3>
+        {pessoa.documentos.length === 0 ? (
+          <p className="text-gray-500 text-sm">Nenhum documento enviado.</p>
+        ) : (
+          <ul className="divide-y">
+            {pessoa.documentos.map(d => (
+              <li key={d.id} className="py-2 flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{d.nomeArquivo}</p>
+                  <p className="text-xs text-gray-500">{d.categoria} • {d.tipo} • {d.dataUpload}</p>
                 </div>
-                <span className={`badge ${
-                  pessoa.status === 'ativo' ? 'badge-success' :
-                  pessoa.status === 'inativo' ? 'badge-gray' : 'badge-warning'
-                }`}>
-                  {pessoa.status}
-                </span>
-              </div>
-
-              {/* Informações */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <DocumentTextIcon className="h-4 w-4 mr-2" />
-                  {formatCpfCnpj(pessoa.cpfCnpj, pessoa.pessoaFisica)}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <PhoneIcon className="h-4 w-4 mr-2" />
-                  {pessoa.telefone}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <EnvelopeIcon className="h-4 w-4 mr-2" />
-                  {pessoa.email}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <MapPinIcon className="h-4 w-4 mr-2" />
-                  {pessoa.endereco.cidade} - {pessoa.endereco.estado}
-                </div>
-              </div>
-
-              {/* Tags */}
-              {pessoa.tags.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex flex-wrap gap-1">
-                    {pessoa.tags.map((tag, index) => (
-                      <span key={index} className="badge badge-info">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Informações específicas por tipo */}
-              {tipo === 'cliente' && pessoa.unidadesAdquiridas && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center text-sm text-blue-700">
-                    <BuildingOfficeIcon className="h-4 w-4 mr-2" />
-                    {pessoa.unidadesAdquiridas.length} unidade(s) adquirida(s)
-                  </div>
-                </div>
-              )}
-
-              {tipo === 'fornecedor' && pessoa.categoria && (
-                <div className="mb-4 p-3 bg-purple-50 rounded-lg">
-                  <div className="flex items-center text-sm text-purple-700">
-                    <BriefcaseIcon className="h-4 w-4 mr-2" />
-                    {pessoa.categoria}
-                  </div>
-                </div>
-              )}
-
-              {/* Observações */}
-              {pessoa.observacoes && (
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600 truncate">{pessoa.observacoes}</p>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => navigate(`/pessoas/${tipo}/${pessoa.id}`)}
-                    className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
-                    title="Ver detalhes"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => navigate(`/pessoas/${tipo}/${pessoa.id}/editar`)}
-                    className="text-yellow-600 hover:text-yellow-800 p-1 hover:bg-yellow-50 rounded"
-                    title="Editar"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-
-                  {tipo === 'lead' && (
-                    <button
-                      onClick={() => converterParaCliente(pessoa.id)}
-                      className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"
-                      title="Converter para Cliente"
-                    >
-                      <ArrowPathIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (confirm(`Tem certeza que deseja excluir ${pessoa.nome}?`)) {
-                      setPessoas(prev => prev.filter(p => p.id !== pessoa.id));
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
-                  title="Excluir"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+                <a href={d.url} target="_blank" className="px-3 py-1.5 border rounded-lg text-sm">Abrir</a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Empty State */}
-      {filteredPessoas.length === 0 && (
-        <div className="text-center py-12">
-          <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">
-            Nenhum {getTipoLabel(tipo).slice(0, -1).toLowerCase()} encontrado
-          </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {searchTerm || statusFilter !== 'todos'
-              ? 'Tente ajustar os filtros de busca.'
-              : `Comece cadastrando seu primeiro ${getTipoLabel(tipo).slice(0, -1).toLowerCase()}.`}
-          </p>
-          {!searchTerm && statusFilter === 'todos' && (
-            <div className="mt-6">
-              <button
-                onClick={() => navigate(`/pessoas/${tipo}/novo`)}
-                className="btn-primary"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Cadastrar Primeiro {getTipoLabel(tipo).slice(0, -1)}
-              </button>
+      {/* Cliente: Unidades */}
+      {pessoa.tipo === 'cliente' && (
+        <div className="bg-white border rounded-lg p-6">
+          <h3 className="font-semibold mb-2">Contratos / Unidades</h3>
+          {(pessoa.unidadesAdquiridas ?? []).length === 0 ? (
+            <p className="text-gray-500 text-sm">Nenhuma unidade vinculada.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="text-left text-gray-500">
+                  <tr><th className="py-2">Empreendimento</th><th className="py-2">Unidade</th><th className="py-2">Status</th><th className="py-2">Aquis. (R$)</th><th className="py-2">Atual (R$)</th><th className="py-2">Data</th></tr>
+                </thead>
+                <tbody className="divide-y">
+                  {pessoa.unidadesAdquiridas!.map(u => (
+                    <tr key={u.id} className="hover:bg-gray-50">
+                      <td className="py-2">{u.empreendimentoNome}</td>
+                      <td className="py-2">{u.unidade}</td>
+                      <td className="py-2 capitalize">{u.status}</td>
+                      <td className="py-2">{fmtMoney(u.valorCompra)}</td>
+                      <td className="py-2">{fmtMoney(u.valorAtual)}</td>
+                      <td className="py-2">{new Date(u.dataAquisicao).toLocaleDateString('pt-BR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-// Formulário (placeholder)
-const PessoaForm: React.FC = () => {
-  const navigate = useNavigate();
-  const { tipo, id } = useParams();
-  const isEdit = Boolean(id);
-
+/* ===================== Subcomponentes ===================== */
+function Quick({ title, value, icon: Icon }:{ title:string; value:string; icon:any }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="bg-white border rounded-lg p-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-md bg-gray-50"><Icon className="w-5 h-5 text-gray-600" /></div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEdit ? 'Editar' : 'Novo'} {tipo}
-          </h1>
-          <p className="text-gray-600">Formulário completo será implementado aqui</p>
+          <p className="text-xs text-gray-500">{title}</p>
+          <p className="text-sm font-medium">{value || '—'}</p>
         </div>
-        <button
-          onClick={() => navigate(`/pessoas/${tipo}`)}
-          className="btn-outline"
-        >
-          Voltar
-        </button>
-      </div>
-      
-      <div className="card p-6">
-        <p className="text-gray-600">
-          Formulário completo com campos específicos por tipo, upload de documentos, 
-          endereço completo, tags e todas as funcionalidades especificadas.
-        </p>
       </div>
     </div>
-  );
-};
+  )
+}
 
-// Detalhes (placeholder)
-const PessoaDetails: React.FC = () => {
-  const navigate = useNavigate();
-  const { tipo, id } = useParams();
+function UnidadesEditor({ unidades, onChange }:{ unidades: UnidadeAdquirida[]; onChange:(u:UnidadeAdquirida[])=>void }) {
+  const [novo, setNovo] = useState<UnidadeAdquirida>({
+    id: crypto.randomUUID(),
+    empreendimentoId: empreendimentosOptions[0]?.id ?? '',
+    empreendimentoNome: empreendimentosOptions[0]?.nome ?? '',
+    unidade: '',
+    valorCompra: 0, valorAtual: 0, status: 'contrato',
+    dataAquisicao: new Date().toISOString().slice(0,10)
+  })
+  function add() {
+    if (!novo.unidade || !novo.empreendimentoId) return
+    onChange([...unidades, novo])
+    setNovo({ ...novo, id: crypto.randomUUID(), unidade:'', valorCompra:0, valorAtual:0 })
+  }
+  function remove(id: string) { onChange(unidades.filter(u => u.id !== id)) }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Detalhes do {tipo}</h1>
-          <p className="text-gray-600">Visualização completa será implementada aqui</p>
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => navigate(`/pessoas/${tipo}/${id}/editar`)}
-            className="btn-primary"
-          >
-            <PencilIcon className="h-5 w-5 mr-2" />
-            Editar
-          </button>
-          <button
-            onClick={() => navigate(`/pessoas/${tipo}`)}
-            className="btn-outline"
-          >
-            Voltar
-          </button>
-        </div>
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+        <label className="md:col-span-2 text-sm">Empreendimento
+          <select className="w-full border rounded-lg px-3 py-2"
+            value={novo.empreendimentoId}
+            onChange={(e)=> {
+              const opt = empreendimentosOptions.find(o => o.id === e.target.value)
+              setNovo({ ...novo, empreendimentoId: e.target.value, empreendimentoNome: opt?.nome ?? '' })
+            }}>
+            {empreendimentosOptions.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">Unidade
+          <input className="w-full border rounded-lg px-3 py-2" value={novo.unidade} onChange={e=>setNovo({...novo, unidade:e.target.value})}/>
+        </label>
+        <label className="text-sm">Valor compra
+          <input type="number" className="w-full border rounded-lg px-3 py-2" value={novo.valorCompra} onChange={e=>setNovo({...novo, valorCompra:Number(e.target.value)||0})}/>
+        </label>
+        <label className="text-sm">Valor atual
+          <input type="number" className="w-full border rounded-lg px-3 py-2" value={novo.valorAtual} onChange={e=>setNovo({...novo, valorAtual:Number(e.target.value)||0})}/>
+        </label>
+        <label className="text-sm">Status
+          <select className="w-full border rounded-lg px-3 py-2" value={novo.status} onChange={e=>setNovo({...novo, status:e.target.value as UnidadeAdquirida['status']})}>
+            <option value="contrato">Contrato</option>
+            <option value="financiamento">Financiamento</option>
+            <option value="pendente">Pendente</option>
+            <option value="quitado">Quitado</option>
+          </select>
+        </label>
       </div>
-      
-      <div className="card p-6">
-        <p className="text-gray-600">
-          Visualização completa com todas as informações, documentos anexados,
-          unidades adquiridas (para clientes), histórico, etc.
-        </p>
+      <div className="flex justify-end">
+        <button type="button" onClick={add} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg">Adicionar</button>
       </div>
-    </div>
-  );
-};
 
-export default Pessoas;
+      {unidades.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr><th className="py-2">Empreendimento</th><th className="py-2">Unidade</th><th className="py-2">Compra</th><th className="py-2">Atual</th><th className="py-2">Status</th><th className="py-2"></th></tr>
+            </thead>
+            <tbody className="divide-y">
+              {unidades.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="py-2">{u.empreendimentoNome}</td>
+                  <td className="py-2">{u.unidade}</td>
+                  <td className="py-2">{fmtMoney(u.valorCompra)}</td>
+                  <td className="py-2">{fmtMoney(u.valorAtual)}</td>
+                  <td className="py-2 capitalize">{u.status}</td>
+                  <td className="py-2 text-right">
+                    <button type="button" onClick={()=>remove(u.id)} className="px-2 py-1 text-red-600 border rounded-lg text-xs">Remover</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
