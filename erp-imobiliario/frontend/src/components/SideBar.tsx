@@ -60,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, userRole }) => {
       ]
     },
     {
-      name: 'CRM',
+      name: 'CRM Comercial',
       href: '/crm',
       icon: ChatBubbleLeftRightIcon,
       current: location.pathname.startsWith('/crm'),
