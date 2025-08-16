@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Bars3Icon,
   BellIcon,
@@ -6,14 +7,18 @@ import {
   UserCircleIcon,
   ChevronDownIcon,
   CogIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  HomeIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'corretor' | 'gerente';
+  role: 'admin' | 'corretor' | 'gerente' | 'engenheiro' | 'arquiteto' | 'juridico' | 'financeiro';
   avatar?: string;
 }
 
@@ -24,8 +29,37 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ user, onLogout, onMenuToggle }) => {
+  const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Gerar breadcrumbs baseado na rota atual
+  const getBreadcrumbs = () => {
+    const path = location.pathname;
+    const segments = path.split('/').filter(Boolean);
+    
+    const breadcrumbMap: Record<string, string> = {
+      'home': 'Dashboard',
+      'pessoas': 'Pessoas',
+      'empreendimentos': 'Empreendimentos',
+      'crm': 'CRM Comercial',
+      'whatsapp': 'WhatsApp',
+      'juridico': 'Jurídico',
+      'financeiro': 'Financeiro',
+      'automacoes': 'Automações',
+      'configuracoes': 'Configurações',
+      'relatorios': 'Relatórios',
+      'imoveis-terceiros': 'Imóveis Terceiros',
+      'notificacoes': 'Notificações',
+      'distribuicao': 'Distribuição de Leads',
+      'acoes-massa': 'Ações em Massa',
+      'integracoes': 'Integrações'
+    };
+
+    return segments.map(segment => breadcrumbMap[segment] || segment);
+  };
+
+  const breadcrumbs = getBreadcrumbs();
 
   const notifications = [
     {
@@ -55,14 +89,19 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, onMenuToggle }) => {
     const roles = {
       admin: 'Administrador',
       gerente: 'Gerente',
-      corretor: 'Corretor'
+      corretor: 'Corretor',
+      engenheiro: 'Engenheiro',
+      arquiteto: 'Arquiteto',
+      juridico: 'Jurídico',
+      financeiro: 'Financeiro'
     };
     return roles[role as keyof typeof roles] || role;
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="flex items-center justify-between px-6 py-4">
+    <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 z-10">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100">
         {/* Left side */}
         <div className="flex items-center">
           <button
@@ -72,23 +111,61 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, onMenuToggle }) => {
             <Bars3Icon className="h-6 w-6" />
           </button>
 
-          {/* Search */}
-          <div className="ml-6 flex-1 max-w-lg">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Buscar imóveis, clientes, contratos..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
+          {/* Breadcrumbs */}
+          <nav className="ml-4" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-2">
+              <li>
+                <div className="flex items-center">
+                  <HomeIcon className="h-4 w-4 text-gray-400" />
+                  <span className="ml-1 text-sm font-medium text-gray-500">LegaSys</span>
+                </div>
+              </li>
+              {breadcrumbs.map((crumb, index) => (
+                <li key={index}>
+                  <div className="flex items-center">
+                    <ChevronDownIcon className="h-4 w-4 text-gray-400 rotate-[-90deg]" />
+                    <span className={`ml-2 text-sm font-medium ${
+                      index === breadcrumbs.length - 1 
+                        ? 'text-blue-600' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}>
+                      {crumb}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </nav>
         </div>
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
+          {/* Quick Stats */}
+          <div className="hidden lg:flex items-center space-x-4 text-sm">
+            <div className="flex items-center text-gray-600">
+              <ClockIcon className="h-4 w-4 mr-1" />
+              {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="flex items-center text-green-600">
+              <CheckCircleIcon className="h-4 w-4 mr-1" />
+              <span className="font-medium">5 leads hoje</span>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="max-w-lg">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Busca rápida..."
+                className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
           {/* Notifications */}
           <div className="relative">
             <button

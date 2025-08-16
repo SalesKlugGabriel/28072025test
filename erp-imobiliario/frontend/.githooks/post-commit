@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Hook post-commit para atualizar README.md automaticamente
+echo "🔄 Executando atualização automática do README..."
+
+# Navega para o diretório do projeto
+cd "$(git rev-parse --show-toplevel)/frontend" || exit 1
+
+# Verifica se o script existe
+if [ ! -f "scripts/update-readme.cjs" ]; then
+    echo "❌ Script update-readme.cjs não encontrado"
+    exit 1
+fi
+
+# Executa o script de atualização
+node scripts/update-readme.cjs
+
+# Verifica se o README foi modificado
+if git diff --quiet README.md; then
+    echo "ℹ️ README.md já está atualizado"
+else
+    echo "📝 README.md foi atualizado - fazendo commit automático..."
+    git add README.md
+    git commit -m "docs: atualização automática do README.md
+
+🤖 Atualização automática realizada pelo hook post-commit
+- Estrutura do projeto atualizada
+- Status de desenvolvimento atualizado
+- Estatísticas do projeto atualizadas"
+fi
+
+echo "✅ Hook post-commit executado com sucesso"

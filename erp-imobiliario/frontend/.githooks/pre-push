@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Hook pre-push para garantir que README está atualizado antes do push
+echo "🔍 Verificando se README.md está atualizado..."
+
+# Navega para o diretório do projeto
+cd "$(git rev-parse --show-toplevel)/frontend" || exit 1
+
+# Executa o script de atualização
+node scripts/update-readme.cjs
+
+# Verifica se o README foi modificado
+if git diff --quiet README.md; then
+    echo "✅ README.md está atualizado"
+else
+    echo "⚠️ README.md foi atualizado - é necessário fazer commit das mudanças"
+    echo "📝 Execute: git add README.md && git commit -m 'docs: atualização automática do README.md'"
+    echo "❌ Push cancelado - faça commit das mudanças primeiro"
+    exit 1
+fi
+
+echo "✅ Hook pre-push executado com sucesso"

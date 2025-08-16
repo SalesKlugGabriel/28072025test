@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from "react";
 import {
-  Sun,
-  Moon,
   Coffee,
   Users,
   FileText,
@@ -43,7 +41,20 @@ const segmentos = [
   { id: "comex", nome: "Comércio Exterior", icone: Globe2 },
 ];
 
-const dadosSegmentoMock: Record<string, any> = {
+interface SegmentData {
+  destaques: Array<{
+    titulo: string;
+    valor: string;
+    variacao: string;
+  }>;
+  noticias: Array<{
+    titulo: string;
+    fonte: string;
+    hora: string;
+  }>;
+}
+
+const dadosSegmentoMock: Record<string, SegmentData> = {
   agro: {
     destaques: [
       { titulo: "Saca de Soja (PR)", valor: "R$ 156,40", variacao: "+0,8%" },
@@ -53,10 +64,12 @@ const dadosSegmentoMock: Record<string, any> = {
       {
         titulo: "Safra de milho surpreende em estados do Centro-Oeste",
         fonte: "AgroNews",
+        hora: "08:30"
       },
       {
         titulo: "Insumos: queda de preço em fertilizantes nitrogenados",
         fonte: "Canal Rural",
+        hora: "09:15"
       },
     ],
   },
@@ -66,8 +79,8 @@ const dadosSegmentoMock: Record<string, any> = {
       { titulo: "IA generativa", valor: "tendência", variacao: "↑" },
     ],
     noticias: [
-      { titulo: "Startup de PropTech capta Série A", fonte: "TechCrunch" },
-      { titulo: "Edge computing cresce no varejo", fonte: "The Verge" },
+      { titulo: "Startup de PropTech capta Série A", fonte: "TechCrunch", hora: "10:30" },
+      { titulo: "Edge computing cresce no varejo", fonte: "The Verge", hora: "11:45" },
     ],
   },
   cripto: {
@@ -76,8 +89,8 @@ const dadosSegmentoMock: Record<string, any> = {
       { titulo: "ETH", valor: "R$ 18.900", variacao: "-0,6%" },
     ],
     noticias: [
-      { titulo: "Reguladores discutem ETFs na América Latina", fonte: "CoinDesk" },
-      { titulo: "Layer-2 ganha adoção em pagamentos", fonte: "The Block" },
+      { titulo: "Reguladores discutem ETFs na América Latina", fonte: "CoinDesk", hora: "13:20" },
+      { titulo: "Layer-2 ganha adoção em pagamentos", fonte: "The Block", hora: "14:15" },
     ],
   },
   financeiro: {
@@ -86,8 +99,8 @@ const dadosSegmentoMock: Record<string, any> = {
       { titulo: "SELIC", valor: "10,50%", variacao: "estável" },
     ],
     noticias: [
-      { titulo: "IPCA desacelera no mês", fonte: "Valor" },
-      { titulo: "Crédito imobiliário tem alta", fonte: "Broadcast" },
+      { titulo: "IPCA desacelera no mês", fonte: "Valor", hora: "15:30" },
+      { titulo: "Crédito imobiliário tem alta", fonte: "Broadcast", hora: "16:00" },
     ],
   },
   comex: {
@@ -96,8 +109,8 @@ const dadosSegmentoMock: Record<string, any> = {
       { titulo: "Exportações (mês)", valor: "+6,1%", variacao: "↑" },
     ],
     noticias: [
-      { titulo: "Mudanças tarifárias na UE", fonte: "Reuters" },
-      { titulo: "Portos operam com restrições climáticas", fonte: "g1" },
+      { titulo: "Mudanças tarifárias na UE", fonte: "Reuters", hora: "17:45" },
+      { titulo: "Portos operam com restrições climáticas", fonte: "g1", hora: "18:20" },
     ],
   },
 };
@@ -212,7 +225,7 @@ function SegmentoContent({ segmentoId }: { segmentoId: string }) {
     <div className="p-6 space-y-6">
       {/* Destaques numéricos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {dados.destaques.map((d: any, idx: number) => (
+        {dados.destaques.map((d, idx: number) => (
           <DestaqueItem key={idx} {...d} />
         ))}
       </div>
@@ -224,7 +237,7 @@ function SegmentoContent({ segmentoId }: { segmentoId: string }) {
             <Newspaper className="w-4 h-4" /> Principais notícias do setor
           </h3>
           <ul className="space-y-3">
-            {dados.noticias.map((n: any, i: number) => (
+            {dados.noticias.map((n, i: number) => (
               <li
                 key={i}
                 className="p-4 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-between"

@@ -2,11 +2,23 @@ import React, {
   useMemo, useReducer, useState, useCallback, createContext, useContext, useEffect, useRef,
 } from "react";
 import {
-  Users, Target, Phone, Mail, MessageSquare, Eye, Edit2, Plus, X, Search,
-  DollarSign, Filter, BarChart3, Columns as KanbanIcon, List as ListIcon,
-  Clock, CheckCircle, ChevronRight, Download, AlertTriangle, MoreVertical,
+  Users, Target, Phone, Mail, MessageSquare, Edit2, Plus, X, Search,
+  DollarSign, Filter, BarChart3, 
+  Clock, CheckCircle, Download, AlertTriangle, MoreVertical,
   MessageCircle, LayoutGrid, PieChart, Paperclip, Send, ChevronDown,
+  WifiIcon
 } from "lucide-react";
+
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+
+// Import do serviço WhatsApp
+import whatsappService, { type WhatsAppMessage } from '../services/whatsappService';
+import { type WhatsAppConnection } from '../types/whatsapp';
+
+// Import dos novos componentes
+import BoardSelector from '../components/BoardSelector';
+import BoardKanban from '../components/BoardKanban';
+import { Board } from '../types/crm-boards';
 
 /* =========================================================
    Tipos
@@ -94,7 +106,7 @@ interface MetasPipeline {
   vendido: number;
 }
 
-type View = "chat" | "dashboard" | "pipeline";
+type View = "board-selector" | "kanban" | "chat" | "dashboard";
 
 /* =========================================================
    Estado global do CRM
@@ -110,6 +122,7 @@ interface CRMState {
   metas: MetasPipeline;
   pipelineAtivo: string;       // nome/slug do pipeline atual
   pipelines: Record<string, { id: string; nome: string; estagios: Status[] }>;
+  selectedBoard: Board | null; // board selecionado no novo sistema
 }
 
 type Action =
@@ -127,7 +140,8 @@ type Action =
   | { type: "BULK_MSGS"; payload: Mensagem[] }
   | { type: "SET_METAS"; payload: MetasPipeline }
   | { type: "SET_PIPELINE"; payload: string }
-  | { type: "UPSERT_PIPELINE"; payload: { id?: string; nome: string; estagios: Status[] } };
+  | { type: "UPSERT_PIPELINE"; payload: { id?: string; nome: string; estagios: Status[] } }
+  | { type: "SELECT_BOARD"; payload: Board | null };
 
 /* =========================================================
    Mocks
@@ -272,10 +286,11 @@ const initialState: CRMState = {
   filtros: { busca: "", status: "", origem: "", responsavel: "", prioridade: "", temperatura: "", cidade: "" },
   modalAtivo: null,
   clienteSelecionado: null,
-  view: "chat", // chat-first
+  view: "board-selector", // novo fluxo: começar com seleção de board
   metas: { lead: 20, contato: 15, interessado: 12, negociacao: 8, proposta: 6, vendido: 4 },
   pipelineAtivo: "comercial",
   pipelines: pipelinesDefaults,
+  selectedBoard: null,
 };
 
 function reducer(state: CRMState, action: Action): CRMState {
@@ -332,6 +347,12 @@ function reducer(state: CRMState, action: Action): CRMState {
         pipelineAtivo: id,
       };
     }
+    case "SELECT_BOARD":
+      return {
+        ...state,
+        selectedBoard: action.payload,
+        view: action.payload ? "kanban" : "board-selector",
+      };
     default:
       return state;
   }
@@ -418,91 +439,8 @@ function useMensagens(clienteId?: string) {
 }
 
 /* =========================================================
-   UI – Header e Tabs
+   UI – Apenas para os modais/ações quando necessário
 ========================================================= */
-
-function HeaderCRM() {
-  const { state, dispatch } = useCRM();
-  const pipeline = state.pipelines[state.pipelineAtivo];
-
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">CRM</h1>
-        <span className="text-gray-400">—</span>
-        <div className="flex items-center gap-2">
-          <button
-            className={`px-3 py-1.5 rounded-lg border ${state.view === "chat" ? "bg-gray-100" : ""}`}
-            onClick={() => dispatch({ type: "SET_VIEW", payload: "chat" })}
-            title="Chat"
-          >
-            <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> Chat</div>
-          </button>
-          <button
-            className={`px-3 py-1.5 rounded-lg border ${state.view === "dashboard" ? "bg-gray-100" : ""}`}
-            onClick={() => dispatch({ type: "SET_VIEW", payload: "dashboard" })}
-            title="Dashboard"
-          >
-            <div className="flex items-center gap-2"><PieChart className="w-4 h-4" /> Dashboard</div>
-          </button>
-          <button
-            className={`px-3 py-1.5 rounded-lg border ${state.view === "pipeline" ? "bg-gray-100" : ""}`}
-            onClick={() => dispatch({ type: "SET_VIEW", payload: "pipeline" })}
-            title="Pipeline (Kanban)"
-          >
-            <div className="flex items-center gap-2"><LayoutGrid className="w-4 h-4" /> Pipeline</div>
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {/* seletor de pipeline (aparece em todas as abas) */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600 hidden sm:inline">Pipeline:</span>
-          <select
-            className="border rounded-lg px-3 py-1.5"
-            value={state.pipelineAtivo}
-            onChange={(e) => dispatch({ type: "SET_PIPELINE", payload: e.target.value })}
-          >
-            {Object.values(state.pipelines).map(p => (
-              <option key={p.id} value={p.id}>{p.nome}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => dispatch({ type: "OPEN_MODAL", payload: "pipelines" })}
-            className="px-2 py-1.5 border rounded-lg text-sm"
-            title="Gerenciar pipelines"
-          >
-            Gerenciar
-          </button>
-        </div>
-
-        <button
-          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "relatorios" })}
-          className="px-3 py-1.5 border rounded-lg flex items-center gap-2"
-          title="Relatórios / Exportar"
-        >
-          <Download className="w-4 h-4" /> Relatórios
-        </button>
-
-        <button
-          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "metas" })}
-          className="px-3 py-1.5 border rounded-lg flex items-center gap-2"
-          title="Metas do pipeline"
-        >
-          <Target className="w-4 h-4" /> Metas
-        </button>
-
-        <button
-          onClick={() => dispatch({ type: "OPEN_MODAL", payload: "novo" })}
-          className="ml-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Novo Lead
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /* =========================================================
    Dashboard (cards simples)
@@ -607,29 +545,90 @@ function Chat() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
 
-  const enviar = () => {
+  const [whatsappConnections, setWhatsappConnections] = useState<WhatsAppConnection[]>([]);
+  const [selectedConnection, setSelectedConnection] = useState<WhatsAppConnection | null>(null);
+  const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
+
+  // Carregar conexões WhatsApp e mensagens
+  useEffect(() => {
+    // Simular carregamento de conexões do localStorage/API
+    const mockConnections: WhatsAppConnection[] = [
+      {
+        id: '1',
+        userId: 'current_user',
+        userName: 'Usuário Atual',
+        phoneNumber: '+5548999991234',
+        status: 'connected',
+        lastConnection: new Date().toISOString(),
+        sessionId: 'session_current_123'
+      }
+    ];
+    
+    setWhatsappConnections(mockConnections);
+    setSelectedConnection(mockConnections.find(c => c.status === 'connected') || null);
+    whatsappService.setConnections(mockConnections);
+    
+    // Listener para novas mensagens WhatsApp
+    const handleNewMessage = (message: WhatsAppMessage) => {
+      setWhatsappMessages(prev => [...prev, message]);
+      
+      // Se a mensagem é para o cliente selecionado, adicionar ao chat
+      if (sel && message.clienteId === sel.id) {
+        const crmMessage: Mensagem = {
+          id: message.id,
+          clienteId: message.clienteId!,
+          autor: message.direction === 'incoming' ? 'lead' : 'agente',
+          canal: 'whatsapp',
+          texto: message.message,
+          data: message.timestamp,
+        };
+        dispatch({ type: "ADD_MSG", payload: crmMessage });
+      }
+    };
+    
+    whatsappService.addMessageListener(handleNewMessage);
+    
+    return () => {
+      whatsappService.removeMessageListener(handleNewMessage);
+    };
+  }, [sel, dispatch]);
+
+  const enviar = async () => {
     if (!sel || !texto.trim()) return;
-    const m: Mensagem = {
-      id: crypto.randomUUID(),
-      clienteId: sel.id,
-      autor: "agente",
-      canal: "whatsapp",
-      texto: texto.trim(),
-      data: new Date().toISOString(),
-    };
-    dispatch({ type: "ADD_MSG", payload: m });
-    setTexto("");
-    // loga atividade
-    const a: Atividade = {
-      id: crypto.randomUUID(),
-      clienteId: sel.id,
-      tipo: "whatsapp",
-      descricao: "Mensagem enviada no chat",
-      data: m.data,
-      responsavel: sel.responsavel,
-      status: "concluido",
-    };
-    dispatch({ type: "ADD_ATIVIDADE", payload: a });
+    
+    // Verificar se há conexão WhatsApp ativa
+    if (!selectedConnection) {
+      alert('Nenhuma conexão WhatsApp ativa. Configure no menu Configurações.');
+      return;
+    }
+    
+    try {
+      // Enviar via WhatsApp Service
+      await whatsappService.sendMessage({
+        connectionId: selectedConnection.id,
+        phoneNumber: whatsappService.formatPhoneNumber(sel.telefone),
+        message: texto.trim(),
+        clienteId: sel.id
+      });
+      
+      setTexto("");
+      
+      // Registrar atividade
+      const a: Atividade = {
+        id: crypto.randomUUID(),
+        clienteId: sel.id,
+        tipo: "whatsapp",
+        descricao: "Mensagem enviada via WhatsApp",
+        data: new Date().toISOString(),
+        responsavel: sel.responsavel,
+        status: "concluido",
+      };
+      dispatch({ type: "ADD_ATIVIDADE", payload: a });
+      
+    } catch (error) {
+      console.error('Erro ao enviar mensagem WhatsApp:', error);
+      alert('Erro ao enviar mensagem. Verifique sua conexão WhatsApp.');
+    }
   };
 
   const contatosFiltrados = useMemo(() => {
@@ -726,18 +725,58 @@ function Chat() {
           <div ref={endRef} />
         </div>
 
+        {/* Status da conexão WhatsApp */}
+        <div className="border-t px-3 py-2 bg-gray-50 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {selectedConnection ? (
+                <>
+                  <WifiIcon className="w-3 h-3 text-green-500" />
+                  <span className="text-green-700">WhatsApp conectado: {selectedConnection.phoneNumber}</span>
+                </>
+              ) : (
+                <>
+                  <ExclamationTriangleIcon className="w-3 h-3 text-red-500" />
+                  <span className="text-red-700">WhatsApp desconectado - Configure nas Configurações</span>
+                </>
+              )}
+            </div>
+            
+            {whatsappConnections.length > 1 && (
+              <select
+                value={selectedConnection?.id || ''}
+                onChange={(e) => setSelectedConnection(whatsappConnections.find(c => c.id === e.target.value) || null)}
+                className="text-xs border rounded px-2 py-1"
+              >
+                <option value="">Selecionar conexão</option>
+                {whatsappConnections.filter(c => c.status === 'connected').map(conn => (
+                  <option key={conn.id} value={conn.id}>
+                    {conn.userName} ({conn.phoneNumber})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
         {/* composer */}
         <div className="border-t p-3 flex items-center gap-2">
           <button className="px-2 py-2 border rounded-lg" title="Anexar"><Paperclip className="w-4 h-4" /></button>
           <input
             className="flex-1 px-3 py-2 border rounded-lg"
-            placeholder="Escreva uma mensagem…"
+            placeholder={selectedConnection ? "Escreva uma mensagem via WhatsApp…" : "Configure WhatsApp para enviar mensagens"}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+            disabled={!selectedConnection}
           />
-          <button onClick={enviar} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-            <Send className="w-4 h-4" /> Enviar
+          <button 
+            onClick={enviar} 
+            disabled={!selectedConnection || !texto.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <Send className="w-4 h-4" /> 
+            {selectedConnection ? 'Enviar' : 'WhatsApp Off'}
           </button>
         </div>
       </div>
@@ -813,128 +852,10 @@ function FiltrosCompactos() {
 }
 
 /* =========================================================
-   Pipeline (Kanban) — drag & drop e drawer
+   Componentes auxiliares mantidos para compatibilidade
 ========================================================= */
 
 const ALL_STATUS: Status[] = ["lead", "contato", "interessado", "negociacao", "proposta", "vendido", "perdido"];
-
-function Pipeline() {
-  const { state } = useCRM();
-  return (
-    <div>
-      <FiltrosCompactos />
-      <Board />
-    </div>
-  );
-}
-
-function Board() {
-  const { state, dispatch } = useCRM();
-  const list = useClientesFiltrados();
-  const estagios = state.pipelines[state.pipelineAtivo]?.estagios ?? ALL_STATUS;
-
-  const porColuna = useMemo(() => {
-    return estagios.reduce<Record<Status, Cliente[]>>((acc, s) => {
-      acc[s] = list.filter((c) => c.status === s);
-      return acc;
-    }, { lead: [], contato: [], interessado: [], negociacao: [], proposta: [], vendido: [], perdido: [] });
-  }, [list, estagios]);
-
-  const onDropCard = (clienteId: string, dest: Status) => {
-    dispatch({ type: "MOVE_STATUS", payload: { id: clienteId, status: dest } });
-  };
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
-      {estagios.map((col) => (
-        <Coluna
-          key={col}
-          titulo={col}
-          cards={porColuna[col]}
-          onDrop={(id) => onDropCard(id, col)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Coluna({ titulo, cards, onDrop }: { titulo: Status; cards: Cliente[]; onDrop: (id: string) => void }) {
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData("text/plain");
-    if (id) onDrop(id);
-  };
-
-  return (
-    <div
-      className="bg-white border rounded-lg p-3 min-h-[280px] flex flex-col"
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="font-semibold capitalize">{titulo}</div>
-        <div className="text-xs text-gray-500">{cards.length}</div>
-      </div>
-
-      <div className="space-y-2 flex-1">
-        {cards.map((c) => <CardKanban key={c.id} c={c} />)}
-        {cards.length === 0 && (
-          <div className="text-xs text-gray-400 text-center py-6 border border-dashed rounded">Arraste cards aqui</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CardKanban({ c }: { c: Cliente }) {
-  const { dispatch } = useCRM();
-  const onDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("text/plain", c.id);
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      className="border rounded-lg p-3 hover:shadow-sm bg-white cursor-grab active:cursor-grabbing"
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <Avatar nome={c.nome} temperatura={c.temperatura} />
-        <div className="font-medium text-sm truncate">{c.nome}</div>
-        <button
-          className="ml-auto p-1 rounded hover:bg-gray-50"
-          title="Ações"
-        >
-          <MoreVertical className="w-4 h-4 text-gray-500" />
-        </button>
-      </div>
-      <div className="text-xs text-gray-500 mb-2">{c.empreendimentoInteresse || "Sem interesse definido"}</div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">{money(c.valorOrcamento)}</span>
-        {c.alertaSLA ? (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700">
-            <AlertTriangle className="w-3 h-3" /> SLA
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700">
-            <Clock className="w-3 h-3" /> OK
-          </span>
-        )}
-        <button
-          className="ml-auto text-xs px-2 py-1 border rounded hover:bg-gray-50"
-          onClick={() => {
-            dispatch({ type: "SELECT_CLIENTE", payload: c });
-            dispatch({ type: "OPEN_MODAL", payload: "detalhes" });
-          }}
-        >
-          Detalhes
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /* =========================================================
    Modais / Drawers
@@ -1162,7 +1083,7 @@ function DrawerDetalhes() {
             <div className="lg:col-span-2">
               <h4 className="font-semibold mb-3">Atividades</h4>
               <div className="space-y-3">
-                {useAtividades(c.id).map((a) => (
+                {atividades.map((a) => (
                   <div key={a.id} className="border rounded-lg p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1176,7 +1097,7 @@ function DrawerDetalhes() {
                     <div className="mt-2 text-sm text-gray-700">{a.descricao}</div>
                   </div>
                 ))}
-                {useAtividades(c.id).length === 0 && (
+                {atividades.length === 0 && (
                   <div className="text-sm text-gray-500">Sem atividades ainda.</div>
                 )}
               </div>
@@ -1410,28 +1331,97 @@ function Field(props: { label: string; children: React.ReactNode }) {
 }
 
 /* =========================================================
-   Página CRM — Chat First + abas
+   Página CRM — Nova estrutura sem guia superior
 ========================================================= */
 
 export default function CRM() {
   return (
     <Provider>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <HeaderCRM />
-        <MainView />
-        <DrawerDetalhes />
-        <ModalNovoLead />
-        <ModalMetas />
-        <ModalRelatorios />
-        <ModalPipelines />
-      </div>
+      <MainView />
+      <DrawerDetalhes />
+      <ModalNovoLead />
+      <ModalMetas />
+      <ModalRelatorios />
+      <ModalPipelines />
     </Provider>
   );
 }
 
 function MainView() {
-  const { state } = useCRM();
-  if (state.view === "chat") return <Chat />;
-  if (state.view === "pipeline") return <Pipeline />;
-  return <Dashboard />;
+  const { state, dispatch } = useCRM();
+  
+  const handleSelectBoard = (board: Board) => {
+    dispatch({ type: "SELECT_BOARD", payload: board });
+  };
+  
+  const handleBackToSelector = () => {
+    dispatch({ type: "SELECT_BOARD", payload: null });
+  };
+  
+  const handleCreateBoard = () => {
+    // Implementar criação de novo board
+    console.log('Criar novo board');
+  };
+  
+  const handleOpenAutomations = () => {
+    // Implementar modal de automações
+    console.log('Abrir automações');
+  };
+  
+  const handleOpenSettings = () => {
+    // Implementar configurações do board
+    console.log('Abrir configurações do board');
+  };
+
+  // Roteamento baseado na view
+  switch (state.view) {
+    case "board-selector":
+      return (
+        <BoardSelector 
+          onSelectBoard={handleSelectBoard}
+          onCreateBoard={handleCreateBoard}
+        />
+      );
+    
+    case "kanban":
+      return state.selectedBoard ? (
+        <BoardKanban
+          board={state.selectedBoard}
+          onBack={handleBackToSelector}
+          onOpenAutomations={handleOpenAutomations}
+          onOpenSettings={handleOpenSettings}
+        />
+      ) : (
+        <BoardSelector 
+          onSelectBoard={handleSelectBoard}
+          onCreateBoard={handleCreateBoard}
+        />
+      );
+    
+    case "chat":
+      return (
+        <div className="h-screen bg-gray-50">
+          <div className="p-6">
+            <Chat />
+          </div>
+        </div>
+      );
+    
+    case "dashboard":
+      return (
+        <div className="h-screen bg-gray-50">
+          <div className="p-6">
+            <Dashboard />
+          </div>
+        </div>
+      );
+    
+    default:
+      return (
+        <BoardSelector 
+          onSelectBoard={handleSelectBoard}
+          onCreateBoard={handleCreateBoard}
+        />
+      );
+  }
 }

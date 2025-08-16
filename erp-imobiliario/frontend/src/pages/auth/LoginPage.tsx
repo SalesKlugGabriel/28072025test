@@ -5,81 +5,35 @@ import {
   EyeSlashIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import { useAuth } from '../../context/auth-context';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'corretor' | 'gerente' | 'engenheiro' | 'arquiteto' | 'juridico' | 'financeiro'; // ← Adicionadas as 4 roles faltantes
-  avatar?: string;
-}
-
-interface LoginPageProps {
-  onLogin: (user: User) => void;
-}
-
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC = () => {
+  const { login, error: authError, isLoading: authLoading, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  // Mock users for demo
-  const mockUsers = [
-    {
-      id: '1',
-      name: 'Gabriel Sales',
-      email: 'admin@erp.com',
-      password: '123456',
-      role: 'admin' as const
-    },
-    {
-      id: '2',
-      name: 'Maria Silva',
-      email: 'maria@erp.com',
-      password: '123456',
-      role: 'gerente' as const
-    },
-    {
-      id: '3',
-      name: 'João Santos',
-      email: 'joao@erp.com',
-      password: '123456',
-      role: 'corretor' as const
-    }
+  // Demo users - alinhado com auth-context.tsx
+  const demoUsers = [
+    { email: 'admin@legasys.com', password: '123456', role: 'Administrador' },
+    { email: 'gerente@legasys.com', password: '123456', role: 'Gerente' },
+    { email: 'corretor@legasys.com', password: '123456', role: 'Corretor' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
-    // Simulate API call
-    setTimeout(() => {
-      const user = mockUsers.find(u => u.email === email && u.password === password);
-      
-      if (user) {
-        onLogin({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        });
-      } else {
-        setError('Email ou senha inválidos');
-      }
-      
-      setIsLoading(false);
-    }, 1500);
+    clearError();
+    
+    try {
+      await login(email, password);
+    } catch (error) {
+      // Error é tratado pelo contexto
+    }
   };
 
-  const fillDemoCredentials = (userType: 'admin' | 'gerente' | 'corretor') => {
-    const user = mockUsers.find(u => u.role === userType);
-    if (user) {
-      setEmail(user.email);
-      setPassword(user.password);
-    }
+  const fillDemoCredentials = (email: string, password: string) => {
+    setEmail(email);
+    setPassword(password);
   };
 
   return (
@@ -141,21 +95,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => fillDemoCredentials('admin')}
+                  onClick={() => fillDemoCredentials('admin@legasys.com', '123456')}
                   className="px-3 py-2 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
                 >
                   Admin
                 </button>
                 <button
                   type="button"
-                  onClick={() => fillDemoCredentials('gerente')}
+                  onClick={() => fillDemoCredentials('gerente@legasys.com', '123456')}
                   className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                 >
                   Gerente
                 </button>
                 <button
                   type="button"
-                  onClick={() => fillDemoCredentials('corretor')}
+                  onClick={() => fillDemoCredentials('corretor@legasys.com', '123456')}
                   className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
                 >
                   Corretor
@@ -163,10 +117,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            {error && (
+            {authError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
                 <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2" />
-                <span className="text-sm text-red-700">{error}</span>
+                <span className="text-sm text-red-700">{authError}</span>
               </div>
             )}
 
@@ -235,10 +189,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={authLoading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isLoading ? (
+                {authLoading ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Entrando...

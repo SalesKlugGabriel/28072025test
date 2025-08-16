@@ -6,7 +6,7 @@ interface CRMContextProps extends CRMState {
   dispatch: React.Dispatch<CRMAction>;
 }
 
-const CRMContext = createContext<CRMContextProps>({
+export const CRMContext = createContext<CRMContextProps>({
   ...initialState,
   dispatch: () => undefined,
 });
@@ -48,4 +48,3 @@ export const CRMProvider: React.FC<React.PropsWithChildren> = ({ children }) => 
   );
 };
 
-export const useCRM = () => useContext(CRMContext);

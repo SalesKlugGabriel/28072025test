@@ -55,7 +55,11 @@ function readJSON<T>(key: string, fallback: T): T {
   }
 }
 function writeJSON<T>(key: string, value: T) {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+  try { 
+    localStorage.setItem(key, JSON.stringify(value)) 
+  } catch {
+    // Ignore localStorage errors
+  }
 }
 
 // --- Seed inicial (2 empreendimentos coerentes com o seu layout) ---

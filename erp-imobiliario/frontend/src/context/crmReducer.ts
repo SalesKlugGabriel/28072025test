@@ -1,13 +1,29 @@
+export interface Cliente {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  origem: string;
+}
+
+export interface Atividade {
+  id: string;
+  titulo: string;
+  descricao: string;
+  dataVencimento: string;
+  status: 'pendente' | 'concluida' | 'cancelada';
+}
+
 export interface CRMState {
-  clientes: any[];
-  atividades: any[];
+  clientes: Cliente[];
+  atividades: Atividade[];
   loading: boolean;
   error: string | null;
 }
 
 export type CRMAction =
-  | { type: 'SET_CLIENTES'; payload: any[] }
-  | { type: 'SET_ATIVIDADES'; payload: any[] }
+  | { type: 'SET_CLIENTES'; payload: Cliente[] }
+  | { type: 'SET_ATIVIDADES'; payload: Atividade[] }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string };
 

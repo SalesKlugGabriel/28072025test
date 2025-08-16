@@ -3,8 +3,14 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, Search, Building, MapPin, Calendar,
   TrendingUp, Home, Edit2, Eye, Trash2, ArrowLeft, X, Clock,
-  Info, Map, FileText, Image, Upload, Download, File
+  Info, Map, FileText, Image, Upload, Download, File, BarChart3, Table
 } from 'lucide-react';
+import ComparadorEmpreendimentos from '../components/ComparadorEmpreendimentos';
+import LandingPageEmpreendimento from '../components/LandingPageEmpreendimento';
+import AtualizadorTabelasEmpreendimento from '../components/AtualizadorTabelasEmpreendimento';
+
+// Import das funcionalidades do módulo jurídico
+import { getMinutaById, processarMinuta, type MinutaTemplate } from './Juridico';
 
 // Interfaces
 interface Localizacao {
@@ -22,12 +28,60 @@ interface Responsaveis {
 }
 
 interface TipoUnidade {
+  id: string;
   nome: string;
   tipologia: string;
   areaPrivativa: string;
-  vagasGaragem: number;
-  quantidade: number;
-  preco: string;
+  vagas: number;
+  valor: number;
+  quantidade?: number;
+}
+
+interface Unidade {
+  numero: number;
+  status: string;
+  tipologia: string;
+  planta: string;
+  vagas: number;
+  valor: string;
+  condicao: string;
+  areaPrivativa: string;
+  areaTotal: string;
+}
+
+interface ClienteReserva {
+  nome: string;
+  cpf: string;
+  email: string;
+  telefone: string;
+  endereco: {
+    logradouro: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    cep: string;
+    estado: string;
+  };
+}
+
+interface CondicaoPagamento {
+  id: string;
+  nome: string;
+  entrada: number; // percentual
+  parcelas: number;
+  intervalo: number; // meses
+  juros: number; // percentual ao mês
+}
+
+interface Reserva {
+  id: string;
+  unidade: Unidade;
+  cliente: ClienteReserva;
+  condicaoPagamento: CondicaoPagamento;
+  valorReserva: number;
+  dataReserva: string;
+  status: 'pendente' | 'aprovada' | 'rejeitada';
+  observacoes?: string;
 }
 
 interface Bloco {
@@ -132,20 +186,22 @@ function Empreendimentos() {
       },
       tiposUnidade: [
         { 
+          id: 'tipo1',
           nome: 'Tipo 1', 
           tipologia: '2 quartos', 
           areaPrivativa: '65m²', 
-          vagasGaragem: 1, 
-          quantidade: 60, 
-          preco: 'R$ 320.000' 
+          vagas: 1, 
+          valor: 320000,
+          quantidade: 60 
         },
         { 
+          id: 'tipo2',
           nome: 'Tipo 2', 
           tipologia: '3 quartos', 
           areaPrivativa: '85m²', 
-          vagasGaragem: 2, 
-          quantidade: 60, 
-          preco: 'R$ 450.000' 
+          vagas: 2, 
+          valor: 450000,
+          quantidade: 60 
         }
       ],
       blocos: [
@@ -159,7 +215,7 @@ function Empreendimentos() {
               id: 'tipo1',
               nome: 'Tipo 1',
               tipologia: '2 quartos',
-              areaPrivativa: 65,
+              areaPrivativa: '65m²',
               vagas: 1,
               valor: 320000
             }
@@ -204,20 +260,22 @@ function Empreendimentos() {
       },
       tiposUnidade: [
         { 
+          id: 'sala1',
           nome: 'Sala Pequena', 
           tipologia: 'Comercial', 
           areaPrivativa: '30m²', 
-          vagasGaragem: 1, 
-          quantidade: 25, 
-          preco: 'R$ 180.000' 
+          vagas: 1, 
+          valor: 180000,
+          quantidade: 25 
         },
         { 
+          id: 'sala2',
           nome: 'Sala Grande', 
           tipologia: 'Comercial', 
           areaPrivativa: '60m²', 
-          vagasGaragem: 2, 
-          quantidade: 25, 
-          preco: 'R$ 350.000' 
+          vagas: 2, 
+          valor: 350000,
+          quantidade: 25 
         }
       ],
       blocos: [
@@ -231,7 +289,7 @@ function Empreendimentos() {
               id: 'sala1',
               nome: 'Sala Pequena',
               tipologia: 'Comercial',
-              areaPrivativa: 30,
+              areaPrivativa: '30m²',
               vagas: 1,
               valor: 180000
             }
@@ -264,6 +322,8 @@ function Empreendimentos() {
     status: '',
     tipo: ''
   });
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [modoVisualizacao, setModoVisualizacao] = useState<'lista' | 'comparacao'>('lista');
 
   // Lista de Empreendimentos - VERSÃO CORRIGIDA
   function ListaEmpreendimentos() {
@@ -276,71 +336,135 @@ function Empreendimentos() {
     });
 
     return (
-      <div>
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Empreendimentos</h1>
-            <p className="text-gray-600 mt-2">Gerencie todos os empreendimentos da empresa</p>
-          </div>
-          <button 
-            onClick={() => navigate('/empreendimentos/novo')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Novo Empreendimento
-          </button>
-        </div>
-
-        {/* Filtros */}
-        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Buscar empreendimentos..."
-                  value={filtros.busca}
-                  onChange={(e) => setFiltros({...filtros, busca: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+      <div className="h-full flex flex-col">
+        {/* Header Responsivo */}
+        <div className="bg-white rounded-lg shadow-sm border p-3 mb-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg lg:text-xl font-bold text-gray-900 truncate">Empreendimentos</h1>
+              <p className="text-xs lg:text-sm text-gray-600">Gerencie todos os empreendimentos da empresa</p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Toggle de visualização */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setModoVisualizacao('lista')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors min-w-0 flex-1 sm:flex-none ${
+                    modoVisualizacao === 'lista'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Building className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:block">Lista</span>
+                </button>
+                <button
+                  onClick={() => setModoVisualizacao('comparacao')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors min-w-0 flex-1 sm:flex-none ${
+                    modoVisualizacao === 'comparacao'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:block">Comparação</span>
+                </button>
               </div>
-            </div>
-            
-            <div>
-              <select
-                value={filtros.status}
-                onChange={(e) => setFiltros({...filtros, status: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+
+              {/* Botão Atualizador de Tabelas */}
+              <button
+                onClick={() => navigate('/empreendimentos/atualizador-tabelas')}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
               >
-                <option value="">Todos os status</option>
-                <option value="planejamento">Planejamento</option>
-                <option value="construcao">Construção</option>
-                <option value="vendas">Vendas</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-            
-            <div>
-              <select
-                value={filtros.tipo}
-                onChange={(e) => setFiltros({...filtros, tipo: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                <Table className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden sm:block">Atualizar Tabelas</span>
+              </button>
+              
+              {/* Botão Buscar */}
+              <button
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
+                  mostrarFiltros 
+                    ? 'bg-blue-600 text-white' 
+                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                <option value="">Todos os tipos</option>
-                <option value="residencial">Residencial</option>
-                <option value="comercial">Comercial</option>
-                <option value="misto">Misto</option>
-                <option value="rural">Rural</option>
-              </select>
+                <Search className="w-4 h-4" />
+                <span className="hidden sm:block">Buscar</span>
+              </button>
+              
+              {/* Botão Novo */}
+              <button
+                onClick={() => navigate('/empreendimentos/novo')}
+                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors min-w-0"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden sm:block">Novo Empreendimento</span>
+                <span className="sm:hidden">Novo</span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Grid de Cards - VERSÃO MELHORADA */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {empreendimentosFiltrados.map((emp) => {
+        {/* Conteúdo Condicional */}
+        {modoVisualizacao === 'lista' ? (
+          <>
+            {/* Filtros - Expansível */}
+            {mostrarFiltros && (
+              <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Buscar empreendimentos..."
+                      value={filtros.busca}
+                      onChange={(e) => setFiltros({...filtros, busca: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <select
+                    value={filtros.status}
+                    onChange={(e) => setFiltros({...filtros, status: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Todos os status</option>
+                    <option value="planejamento">Planejamento</option>
+                    <option value="construcao">Construção</option>
+                    <option value="vendas">Vendas</option>
+                    <option value="entregue">Entregue</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <select
+                    value={filtros.tipo}
+                    onChange={(e) => setFiltros({...filtros, tipo: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Todos os tipos</option>
+                    <option value="residencial">Residencial</option>
+                    <option value="comercial">Comercial</option>
+                    <option value="misto">Misto</option>
+                    <option value="rural">Rural</option>
+                  </select>
+                </div>
+              </div>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {modoVisualizacao === 'lista' ? (
+          /* Grid de Cards - VERSÃO MELHORADA */
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 pb-6">
+            {empreendimentosFiltrados.map((emp) => {
             const progresso = ((emp.unidadesVendidas + emp.unidadesReservadas) / emp.unidadesTotal) * 100;
             const unidadesDisponiveis = emp.unidadesTotal - emp.unidadesVendidas - emp.unidadesReservadas;
             
@@ -492,20 +616,27 @@ function Empreendimentos() {
               </div>
             );
           })}
-        </div>
+          </div>
 
-        {/* Estado vazio */}
-        {empreendimentosFiltrados.length === 0 && (
-          <div className="text-center py-12">
-            <Building className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
-            <p className="text-gray-600 mb-4">Tente ajustar os filtros ou cadastre um novo empreendimento</p>
-            <button 
-              onClick={() => navigate('/empreendimentos/novo')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Cadastrar Empreendimento
-            </button>
+            {/* Estado vazio */}
+            {empreendimentosFiltrados.length === 0 && (
+              <div className="text-center py-12">
+                <Building className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+                <p className="text-gray-600 mb-4">Tente ajustar os filtros ou cadastre um novo empreendimento</p>
+                <button 
+                  onClick={() => navigate('/empreendimentos/novo')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Cadastrar Empreendimento
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Comparador de Empreendimentos */
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <ComparadorEmpreendimentos />
           </div>
         )}
       </div>
@@ -515,8 +646,8 @@ function Empreendimentos() {
   // Formulário de Cadastro/Edição - VERSÃO CORRIGIDA
   function FormularioEmpreendimento() {
     const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const [formData, setFormData] = useState<FormDataType>({
+    const { id } = useParams<{ id: string }>();
+    const [formData, setFormData] = useState<FormDataType>({
     nome: '',
     tipo: 'residencial',
     status: 'planejamento',
@@ -625,9 +756,9 @@ function Empreendimentos() {
               nome: t.nome,
               tipologia: t.tipologia,
               areaPrivativa: t.areaPrivativa,
-              vagasGaragem: t.vagasGaragem,
+              vagasGaragem: t.vagas,
               planta: null,
-              preco: t.preco
+              preco: `R$ ${t.valor.toLocaleString()}`
             })),
             infraestrutura: emp.infraestrutura || [],
             areaLazer: emp.areaLazer || [],
@@ -647,7 +778,7 @@ function Empreendimentos() {
           }
         }
       }
-    }, [id]);
+    }, [id, opcoesStatus, opcoesTipo, opcoesTipologia]);
 
     const buscarCEP = async (cep: string) => {
       const limpo = cep.replace(/\D/g, '');
@@ -1361,6 +1492,7 @@ function Empreendimentos() {
     const navigate = useNavigate();
     const { id: empreendimentoId } = useParams<{ id: string }>();
     const [abaAtiva, setAbaAtiva] = useState<string>('informacoes');
+    const [modalReserva, setModalReserva] = useState<{ unidade: Unidade; empreendimento: Empreendimento } | null>(null);
 
     // Encontrar o empreendimento
     const empreendimento = mockEmpreendimentos.find(e => e.id === empreendimentoId);
@@ -1390,7 +1522,7 @@ function Empreendimentos() {
     ];
 
     return (
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto h-full flex flex-col">
         {/* Header com foto de capa */}
         <div className="relative h-64 bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg overflow-hidden mb-6">
           <img 
@@ -1432,13 +1564,23 @@ function Empreendimentos() {
             </div>
           </div>
           
-          {/* Botão de edição */}
-          <button
-            onClick={() => navigate(`/empreendimentos/editar/${empreendimentoId}`)}
-            className="absolute top-6 right-6 p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors text-white"
-          >
-            <Edit2 className="w-5 h-5" />
-          </button>
+          {/* Botões de ação */}
+          <div className="absolute top-6 right-6 flex gap-2">
+            <button
+              onClick={() => navigate(`/empreendimentos/landing/${empreendimentoId}`)}
+              className="p-2 bg-green-500/90 backdrop-blur-sm rounded-lg hover:bg-green-600/90 transition-colors text-white"
+              title="Ver Landing Page"
+            >
+              <Eye className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => navigate(`/empreendimentos/editar/${empreendimentoId}`)}
+              className="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors text-white"
+              title="Editar Empreendimento"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Navegação por abas */}
@@ -1465,13 +1607,24 @@ function Empreendimentos() {
         </div>
 
         {/* Conteúdo das abas */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          {abaAtiva === 'informacoes' && <AbaInformacoes empreendimento={empreendimento} />}
-          {abaAtiva === 'tabelas' && <AbaTabelas empreendimento={empreendimento} />}
-          {abaAtiva === 'mapa' && <AbaMapaDisponibilidade />}
-          {abaAtiva === 'documentos' && <AbaDocumentos />}
-          {abaAtiva === 'fotos' && <AbaFotos />}
+        <div className="bg-white rounded-lg shadow-sm border flex-1 min-h-0">
+          <div className="h-full overflow-y-auto p-6">
+            {abaAtiva === 'informacoes' && <AbaInformacoes empreendimento={empreendimento} />}
+            {abaAtiva === 'tabelas' && <AbaTabelas empreendimento={empreendimento} />}
+            {abaAtiva === 'mapa' && <AbaMapaDisponibilidade empreendimento={empreendimento} onReserva={(unidade) => setModalReserva({ unidade, empreendimento })} />}
+            {abaAtiva === 'documentos' && <AbaDocumentos />}
+            {abaAtiva === 'fotos' && <AbaFotos />}
+          </div>
         </div>
+        
+        {/* Modal de Reserva */}
+        {modalReserva && (
+          <ModalReserva 
+            unidade={modalReserva.unidade}
+            empreendimento={modalReserva.empreendimento}
+            onClose={() => setModalReserva(null)}
+          />
+        )}
       </div>
     );
   }
@@ -1639,12 +1792,12 @@ function Empreendimentos() {
                   <div key={index} className="bg-gray-50 rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-medium text-gray-900">{tipo.nome}</h4>
-                      <span className="text-sm text-blue-600 font-medium">{tipo.preco}</span>
+                      <span className="text-sm text-blue-600 font-medium">R$ {tipo.valor.toLocaleString()}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                       <div>Tipologia: {tipo.tipologia}</div>
                       <div>Área: {tipo.areaPrivativa}</div>
-                      <div>Vagas: {tipo.vagasGaragem}</div>
+                      <div>Vagas: {tipo.vagas}</div>
                       <div>Unidades: {tipo.quantidade}</div>
                     </div>
                   </div>
@@ -1668,7 +1821,7 @@ function Empreendimentos() {
     const [valorFixo, setValorFixo] = useState('');
     const [valorPercentual, setValorPercentual] = useState('');
     const [novosValores, setNovosValores] = useState<string[]>(
-      empreendimento.tiposUnidade?.map(t => t.preco) || []
+      empreendimento.tiposUnidade?.map(t => `R$ ${t.valor.toLocaleString()}`) || []
     );
 
     const historico = empreendimento.historicoValores || [];
@@ -1829,7 +1982,7 @@ function Empreendimentos() {
                         <td className="px-4 py-2">
                           {t.nome} - {t.tipologia}
                         </td>
-                        <td className="px-4 py-2">{t.preco}</td>
+                        <td className="px-4 py-2">R$ {t.valor.toLocaleString()}</td>
                         <td className="px-4 py-2">
                           <input
                             value={novosValores[i] || ''}
@@ -1888,8 +2041,8 @@ function Empreendimentos() {
   }
 
   // Componente: Aba Mapa de Disponibilidade
-  function AbaMapaDisponibilidade() {
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; unidade: { numero: number; status: string } } | null>(null);
+  function AbaMapaDisponibilidade({ empreendimento, onReserva }: { empreendimento: Empreendimento; onReserva: (unidade: Unidade) => void }) {
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; unidade: Unidade } | null>(null);
     const [unidades, setUnidades] = useState<{ numero: number; status: string }[]>([]);
 
     const gerarStatus = () => {
@@ -1911,7 +2064,7 @@ function Empreendimentos() {
       setUnidades(inicial);
     }, []);
 
-    const handleUnidadeClick = (e: React.MouseEvent<HTMLButtonElement>, unidade: { numero: number; status: string }) => {
+    const handleUnidadeClick = (e: React.MouseEvent<HTMLButtonElement>, unidade: Unidade) => {
       const rect = e.currentTarget.getBoundingClientRect();
       setTooltip({ x: rect.left + rect.width / 2, y: rect.top + window.scrollY, unidade });
     };
@@ -1949,7 +2102,7 @@ function Empreendimentos() {
                     {Array.from({ length: 4 }, (_, apto) => {
                       const numeroApto = numeroAndar * 100 + (apto + 1);
                       const unidade = unidades.find(u => u.numero === numeroApto);
-                      const status = unidade?.status || 'disponivel';
+                      const status = (unidade?.status || 'disponivel') as keyof typeof cores;
                       return (
                         <button
                           key={numeroApto}
@@ -1990,7 +2143,7 @@ function Empreendimentos() {
               <X className="w-4 h-4" />
             </button>
             <h4 className="font-semibold mb-2">Unidade {tooltip.unidade.numero}</h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-3">
               <div><span className="font-medium">Status:</span> {tooltip.unidade.status}</div>
               <div><span className="font-medium">Tipologia:</span> {tooltip.unidade.tipologia}</div>
               <div><span className="font-medium">Planta:</span> {tooltip.unidade.planta}</div>
@@ -2000,8 +2153,25 @@ function Empreendimentos() {
               <div><span className="font-medium">Área privativa:</span> {tooltip.unidade.areaPrivativa}</div>
               <div><span className="font-medium">Área total:</span> {tooltip.unidade.areaTotal}</div>
             </div>
+            {tooltip.unidade.status === 'disponivel' && (
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    onReserva(tooltip.unidade);
+                    setTooltip(null);
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                >
+                  Reservar Unidade
+                </button>
+                <button className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors">
+                  Ver Detalhes
+                </button>
+              </div>
+            )}
           </div>
         )}
+        
       </div>
     );
   }
@@ -2104,10 +2274,638 @@ function Empreendimentos() {
   }
 
   // Mapa de Disponibilidade Dedicado
+  // Componentes das etapas do modal de reserva
+  function EtapaCliente({ clienteData, setClienteData, onNext }: {
+    clienteData: ClienteReserva;
+    setClienteData: (data: ClienteReserva) => void;
+    onNext: () => void;
+  }) {
+    const [errors, setErrors] = useState<any>({});
+    
+    const validarFormulario = () => {
+      const newErrors: any = {};
+      
+      if (!clienteData.nome.trim()) newErrors.nome = 'Nome é obrigatório';
+      if (!clienteData.cpf.trim()) newErrors.cpf = 'CPF é obrigatório';
+      if (!clienteData.email.trim()) newErrors.email = 'Email é obrigatório';
+      if (!clienteData.telefone.trim()) newErrors.telefone = 'Telefone é obrigatório';
+      
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+    
+    const handleSubmit = () => {
+      if (validarFormulario()) {
+        onNext();
+      }
+    };
+    
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nome Completo *
+            </label>
+            <input
+              type="text"
+              value={clienteData.nome}
+              onChange={(e) => setClienteData({ ...clienteData, nome: e.target.value })}
+              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                errors.nome ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="Digite o nome completo"
+            />
+            {errors.nome && <p className="text-red-600 text-sm mt-1">{errors.nome}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              CPF *
+            </label>
+            <input
+              type="text"
+              value={clienteData.cpf}
+              onChange={(e) => setClienteData({ ...clienteData, cpf: e.target.value })}
+              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                errors.cpf ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="000.000.000-00"
+            />
+            {errors.cpf && <p className="text-red-600 text-sm mt-1">{errors.cpf}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email *
+            </label>
+            <input
+              type="email"
+              value={clienteData.email}
+              onChange={(e) => setClienteData({ ...clienteData, email: e.target.value })}
+              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                errors.email ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="email@exemplo.com"
+            />
+            {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Telefone *
+            </label>
+            <input
+              type="tel"
+              value={clienteData.telefone}
+              onChange={(e) => setClienteData({ ...clienteData, telefone: e.target.value })}
+              className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                errors.telefone ? 'border-red-300' : 'border-gray-300'
+              }`}
+              placeholder="(11) 99999-9999"
+            />
+            {errors.telefone && <p className="text-red-600 text-sm mt-1">{errors.telefone}</p>}
+          </div>
+        </div>
+        
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium text-gray-900">Endereço</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+              <input
+                type="text"
+                value={clienteData.endereco.cep}
+                onChange={(e) => setClienteData({ 
+                  ...clienteData, 
+                  endereco: { ...clienteData.endereco, cep: e.target.value }
+                })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                placeholder="00000-000"
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro</label>
+              <input
+                type="text"
+                value={clienteData.endereco.logradouro}
+                onChange={(e) => setClienteData({ 
+                  ...clienteData, 
+                  endereco: { ...clienteData.endereco, logradouro: e.target.value }
+                })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                placeholder="Rua, Avenida, etc."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
+              <input
+                type="text"
+                value={clienteData.endereco.numero}
+                onChange={(e) => setClienteData({ 
+                  ...clienteData, 
+                  endereco: { ...clienteData.endereco, numero: e.target.value }
+                })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                placeholder="123"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+              <input
+                type="text"
+                value={clienteData.endereco.bairro}
+                onChange={(e) => setClienteData({ 
+                  ...clienteData, 
+                  endereco: { ...clienteData.endereco, bairro: e.target.value }
+                })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                placeholder="Nome do bairro"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+              <input
+                type="text"
+                value={clienteData.endereco.cidade}
+                onChange={(e) => setClienteData({ 
+                  ...clienteData, 
+                  endereco: { ...clienteData.endereco, cidade: e.target.value }
+                })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                placeholder="Nome da cidade"
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-end">
+          <button
+            onClick={handleSubmit}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Próximo Passo
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  function EtapaPagamento({ condicoes, condicaoSelecionada, setCondicaoSelecionada, valorUnidade, calcularValores, formatCurrency, onBack, onNext }: {
+    condicoes: CondicaoPagamento[];
+    condicaoSelecionada: CondicaoPagamento | null;
+    setCondicaoSelecionada: (condicao: CondicaoPagamento) => void;
+    valorUnidade: number;
+    calcularValores: (condicao: CondicaoPagamento) => any;
+    formatCurrency: (value: number) => string;
+    onBack: () => void;
+    onNext: () => void;
+  }) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            Selecione a Condição de Pagamento
+          </h3>
+          <p className="text-gray-600 mb-6">
+            Valor da unidade: <span className="font-semibold">{formatCurrency(valorUnidade)}</span>
+          </p>
+        </div>
+        
+        <div className="space-y-4">
+          {condicoes.map((condicao) => {
+            const { valorEntrada, valorParcela } = calcularValores(condicao);
+            const isSelected = condicaoSelecionada?.id === condicao.id;
+            
+            return (
+              <div
+                key={condicao.id}
+                onClick={() => setCondicaoSelecionada(condicao)}
+                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                  isSelected 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="radio"
+                        checked={isSelected}
+                        onChange={() => setCondicaoSelecionada(condicao)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label className="ml-3 text-lg font-medium text-gray-900">
+                        {condicao.nome}
+                      </label>
+                    </div>
+                    
+                    <div className="ml-7 space-y-1 text-sm text-gray-600">
+                      <p>Entrada: <span className="font-medium">{formatCurrency(valorEntrada)} ({condicao.entrada}%)</span></p>
+                      {condicao.parcelas > 1 && (
+                        <p>
+                          Parcelas: <span className="font-medium">
+                            {condicao.parcelas}x de {formatCurrency(valorParcela)}
+                          </span>
+                          {condicao.juros > 0 && (
+                            <span className="text-gray-500"> (juros: {condicao.juros}% a.m.)</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        <div className="flex justify-between">
+          <button
+            onClick={onBack}
+            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={onNext}
+            disabled={!condicaoSelecionada}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Próximo Passo
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  function EtapaConfirmacao({ unidade, empreendimento, clienteData, condicaoSelecionada, observacoes, setObservacoes, valorUnidade, calcularValores, formatCurrency, onBack, onConfirm, loading }: {
+    unidade: Unidade;
+    empreendimento: Empreendimento;
+    clienteData: ClienteReserva;
+    condicaoSelecionada: CondicaoPagamento;
+    observacoes: string;
+    setObservacoes: (obs: string) => void;
+    valorUnidade: number;
+    calcularValores: (condicao: CondicaoPagamento) => any;
+    formatCurrency: (value: number) => string;
+    onBack: () => void;
+    onConfirm: () => void;
+    loading: boolean;
+  }) {
+    const { valorEntrada, valorParcela } = calcularValores(condicaoSelecionada);
+    
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            Confirme os Dados da Reserva
+          </h3>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Resumo da Unidade */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-3">Dados da Unidade</h4>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Empreendimento:</span> {empreendimento.nome}</p>
+              <p><span className="font-medium">Unidade:</span> {unidade.numero}</p>
+              <p><span className="font-medium">Tipologia:</span> {unidade.tipologia}</p>
+              <p><span className="font-medium">Área Privativa:</span> {unidade.areaPrivativa}</p>
+              <p><span className="font-medium">Valor:</span> {formatCurrency(valorUnidade)}</p>
+            </div>
+          </div>
+          
+          {/* Dados do Cliente */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-3">Dados do Cliente</h4>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Nome:</span> {clienteData.nome}</p>
+              <p><span className="font-medium">CPF:</span> {clienteData.cpf}</p>
+              <p><span className="font-medium">Email:</span> {clienteData.email}</p>
+              <p><span className="font-medium">Telefone:</span> {clienteData.telefone}</p>
+            </div>
+          </div>
+          
+          {/* Condição de Pagamento */}
+          <div className="bg-blue-50 p-4 rounded-lg lg:col-span-2">
+            <h4 className="font-medium text-blue-900 mb-3">Condição de Pagamento</h4>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Forma:</span> {condicaoSelecionada.nome}</p>
+              <p><span className="font-medium">Entrada:</span> {formatCurrency(valorEntrada)} ({condicaoSelecionada.entrada}%)</p>
+              {condicaoSelecionada.parcelas > 1 && (
+                <p>
+                  <span className="font-medium">Parcelas:</span> {condicaoSelecionada.parcelas}x de {formatCurrency(valorParcela)}
+                  {condicaoSelecionada.juros > 0 && (
+                    <span className="text-blue-700"> (juros: {condicaoSelecionada.juros}% a.m.)</span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Observações Adicionais
+          </label>
+          <textarea
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            rows={3}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+            placeholder="Informações adicionais sobre a reserva..."
+          />
+        </div>
+        
+        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            <strong>Atenção:</strong> Ao confirmar, será gerada uma proposta em formato de documento 
+            que poderá ser enviada para aprovação da construtora ou utilizada para efetuar a aquisição 
+            do imóvel. O cliente também será cadastrado no sistema.
+          </p>
+        </div>
+        
+        <div className="flex justify-between">
+          <button
+            onClick={onBack}
+            disabled={loading}
+            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+          >
+            {loading && (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            )}
+            {loading ? 'Gerando Proposta...' : 'Confirmar e Gerar Proposta'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Componente: Modal de Reserva de Unidade
+  function ModalReserva({ unidade, empreendimento, onClose }: { 
+    unidade: Unidade; 
+    empreendimento: Empreendimento; 
+    onClose: () => void;
+  }) {
+    const [etapa, setEtapa] = useState<'cliente' | 'pagamento' | 'confirmacao'>('cliente');
+    const [clienteData, setClienteData] = useState<ClienteReserva>({
+      nome: '',
+      cpf: '',
+      email: '',
+      telefone: '',
+      endereco: {
+        logradouro: '',
+        numero: '',
+        bairro: '',
+        cidade: '',
+        cep: '',
+        estado: ''
+      }
+    });
+    
+    const [condicaoSelecionada, setCondicaoSelecionada] = useState<CondicaoPagamento | null>(null);
+    const [observacoes, setObservacoes] = useState('');
+    const [loading, setLoading] = useState(false);
+    
+    // Condições de pagamento mockadas
+    const condicoesPagamento: CondicaoPagamento[] = [
+      { id: '1', nome: 'À Vista', entrada: 100, parcelas: 1, intervalo: 0, juros: 0 },
+      { id: '2', nome: 'Entrada + 60x', entrada: 30, parcelas: 60, intervalo: 1, juros: 0.8 },
+      { id: '3', nome: 'Entrada + 120x', entrada: 20, parcelas: 120, intervalo: 1, juros: 1.0 },
+      { id: '4', nome: 'Financiamento CEF', entrada: 20, parcelas: 420, intervalo: 1, juros: 0.65 },
+      { id: '5', nome: 'Consórcio Contemplado', entrada: 0, parcelas: 1, intervalo: 0, juros: 0 }
+    ];
+    
+    const valorUnidade = parseFloat(unidade.valor.replace('R$ ', '').replace('.', '').replace(',', '.'));
+    
+    const calcularValores = (condicao: CondicaoPagamento) => {
+      const valorEntrada = (valorUnidade * condicao.entrada) / 100;
+      const valorFinanciado = valorUnidade - valorEntrada;
+      const valorParcela = condicao.parcelas > 1 
+        ? valorFinanciado * (1 + (condicao.juros / 100)) / condicao.parcelas
+        : 0;
+      
+      return { valorEntrada, valorFinanciado, valorParcela };
+    };
+    
+    const formatCurrency = (value: number) => {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(value);
+    };
+    
+    const gerarMinuta = async () => {
+      if (!condicaoSelecionada) return;
+      
+      setLoading(true);
+      
+      try {
+        const { valorEntrada, valorParcela } = calcularValores(condicaoSelecionada);
+        
+        // Buscar minuta base do módulo jurídico (Termo de Reserva)
+        const minutaBase = getMinutaById('2'); // ID da minuta "Termo de Reserva de Unidade"
+        
+        if (!minutaBase) {
+          alert('Minuta base não encontrada. Configure as minutas no módulo Jurídico.');
+          return;
+        }
+        
+        // Simular processamento
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Preparar dados para substituição na minuta
+        const dadosMinuta = {
+          nomeEmpreendimento: empreendimento.nome,
+          nomeIncorporadora: 'LegaSys Incorporadora Ltda',
+          cnpjIncorporadora: '12.345.678/0001-90',
+          nomeCliente: clienteData.nome,
+          cpfCliente: clienteData.cpf,
+          emailCliente: clienteData.email,
+          telefoneCliente: clienteData.telefone,
+          enderecoCliente: `${clienteData.endereco.logradouro}, ${clienteData.endereco.numero} - ${clienteData.endereco.bairro}, ${clienteData.endereco.cidade}/${clienteData.endereco.estado} - CEP: ${clienteData.endereco.cep}`,
+          numeroUnidade: unidade.numero.toString(),
+          tipologiaUnidade: unidade.tipologia,
+          areaPrivativa: unidade.areaPrivativa.replace('m²', ''),
+          numeroVagas: unidade.vagas.toString(),
+          valorUnidade: formatCurrency(valorUnidade),
+          condicaoPagamento: condicaoSelecionada.nome,
+          valorEntrada: formatCurrency(valorEntrada),
+          percentualEntrada: condicaoSelecionada.entrada.toString(),
+          parcelasInfo: condicaoSelecionada.parcelas > 1 
+            ? `- Parcelas: ${condicaoSelecionada.parcelas}x de ${formatCurrency(valorParcela)}${condicaoSelecionada.juros > 0 ? ` (juros: ${condicaoSelecionada.juros}% a.m.)` : ''}`
+            : '',
+          valorReserva: formatCurrency(valorEntrada * 0.1), // 10% da entrada como reserva
+          prazoReserva: '30', // 30 dias padrão
+          observacoes: observacoes || 'Nenhuma observação adicional.',
+          cidade: empreendimento.localizacao.cidade,
+          dataReserva: new Date().toLocaleDateString('pt-BR')
+        };
+        
+        // Processar minuta com os dados
+        const minutaProcessada = processarMinuta(minutaBase.conteudo, dadosMinuta);
+        
+        // Criar documento para download
+        const blob = new Blob([minutaProcessada], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Termo_Reserva_Unidade_${unidade.numero}_${empreendimento.nome.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Salvar cliente no sistema (integrar com módulo Pessoas)
+        // TODO: Implementar integração com módulo de Pessoas
+        const novoCliente = {
+          id: crypto.randomUUID(),
+          tipo: 'cliente' as const,
+          nome: clienteData.nome,
+          cpfCnpj: clienteData.cpf,
+          email: clienteData.email,
+          telefone: clienteData.telefone,
+          endereco: clienteData.endereco,
+          pessoaFisica: true,
+          status: 'ativo' as const,
+          dataInclusao: new Date().toISOString().split('T')[0],
+          dataAtualizacao: new Date().toISOString().split('T')[0],
+          tags: ['reserva', 'unidade-' + unidade.numero],
+          observacoes: `Cliente interessado na unidade ${unidade.numero} do empreendimento ${empreendimento.nome}. Reserva gerada em ${new Date().toLocaleDateString('pt-BR')}.`,
+          responsavel: 'Sistema'
+        };
+        
+        console.log('Cliente a ser salvo no módulo Pessoas:', novoCliente);
+        
+        alert(`Termo de Reserva gerado com sucesso!
+
+Documento: Termo_Reserva_Unidade_${unidade.numero}
+Cliente: ${clienteData.nome}
+Valor da Reserva: ${formatCurrency(valorEntrada * 0.1)}
+
+Arquivo baixado automaticamente.`);
+        onClose();
+        
+      } catch (error) {
+        console.error('Erro ao gerar termo de reserva:', error);
+        alert('Erro ao gerar termo de reserva. Tente novamente.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Reservar Unidade {unidade.numero}
+                </h2>
+                <p className="text-gray-600">
+                  {empreendimento.nome} • {unidade.tipologia} • {unidade.valor}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {/* Progress Steps */}
+            <div className="flex items-center mt-4 space-x-4">
+              <div className={`flex items-center ${etapa === 'cliente' ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                  etapa === 'cliente' ? 'border-blue-600 bg-blue-50' : 'border-gray-300'
+                }`}>
+                  1
+                </div>
+                <span className="ml-2 text-sm font-medium">Dados do Cliente</span>
+              </div>
+              <div className={`flex items-center ${etapa === 'pagamento' ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                  etapa === 'pagamento' ? 'border-blue-600 bg-blue-50' : 'border-gray-300'
+                }`}>
+                  2
+                </div>
+                <span className="ml-2 text-sm font-medium">Condição de Pagamento</span>
+              </div>
+              <div className={`flex items-center ${etapa === 'confirmacao' ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                  etapa === 'confirmacao' ? 'border-blue-600 bg-blue-50' : 'border-gray-300'
+                }`}>
+                  3
+                </div>
+                <span className="ml-2 text-sm font-medium">Confirmação</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {etapa === 'cliente' && (
+              <EtapaCliente 
+                clienteData={clienteData}
+                setClienteData={setClienteData}
+                onNext={() => setEtapa('pagamento')}
+              />
+            )}
+            
+            {etapa === 'pagamento' && (
+              <EtapaPagamento 
+                condicoes={condicoesPagamento}
+                condicaoSelecionada={condicaoSelecionada}
+                setCondicaoSelecionada={setCondicaoSelecionada}
+                valorUnidade={valorUnidade}
+                calcularValores={calcularValores}
+                formatCurrency={formatCurrency}
+                onBack={() => setEtapa('cliente')}
+                onNext={() => setEtapa('confirmacao')}
+              />
+            )}
+            
+            {etapa === 'confirmacao' && (
+              <EtapaConfirmacao 
+                unidade={unidade}
+                empreendimento={empreendimento}
+                clienteData={clienteData}
+                condicaoSelecionada={condicaoSelecionada!}
+                observacoes={observacoes}
+                setObservacoes={setObservacoes}
+                valorUnidade={valorUnidade}
+                calcularValores={calcularValores}
+                formatCurrency={formatCurrency}
+                onBack={() => setEtapa('pagamento')}
+                onConfirm={gerarMinuta}
+                loading={loading}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   function MapaDisponibilidade() {
     const navigate = useNavigate();
     const { id: empreendimentoId } = useParams<{ id: string }>();
     const empreendimento = mockEmpreendimentos.find(e => e.id === empreendimentoId);
+    const [modalReserva, setModalReserva] = useState<{ unidade: Unidade; empreendimento: Empreendimento } | null>(null);
     
     if (!empreendimento) {
       return (
@@ -2151,22 +2949,35 @@ function Empreendimentos() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          <AbaMapaDisponibilidade />
+          <AbaMapaDisponibilidade empreendimento={empreendimento} onReserva={(unidade) => setModalReserva({ unidade, empreendimento })} />
         </div>
+        
+        {/* Modal de Reserva */}
+        {modalReserva && (
+          <ModalReserva 
+            unidade={modalReserva.unidade}
+            empreendimento={modalReserva.empreendimento}
+            onClose={() => setModalReserva(null)}
+          />
+        )}
       </div>
     );
   }
 
   // Router principal
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <Routes>
-        <Route index element={<ListaEmpreendimentos />} />
-        <Route path="novo" element={<FormularioEmpreendimento />} />
-        <Route path="editar/:id" element={<FormularioEmpreendimento />} />
-        <Route path="detalhes/:id" element={<DetalhesEmpreendimento />} />
-        <Route path="mapa/:id" element={<MapaDisponibilidade />} />
-      </Routes>
+    <div className="h-full bg-gray-50 flex flex-col">
+      <div className="flex-1 overflow-y-auto p-6 min-h-0">
+        <Routes>
+          <Route index element={<ListaEmpreendimentos />} />
+          <Route path="novo" element={<FormularioEmpreendimento />} />
+          <Route path="editar/:id" element={<FormularioEmpreendimento />} />
+          <Route path="detalhes/:id" element={<DetalhesEmpreendimento />} />
+          <Route path="mapa/:id" element={<MapaDisponibilidade />} />
+          <Route path="landing/:id" element={<LandingPageEmpreendimento />} />
+          <Route path="atualizador-tabelas" element={<AtualizadorTabelasEmpreendimento />} />
+        </Routes>
+      </div>
     </div>
   );
 }
