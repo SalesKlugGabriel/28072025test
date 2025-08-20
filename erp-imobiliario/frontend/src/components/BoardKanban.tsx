@@ -20,65 +20,9 @@ interface BoardKanbanProps {
 }
 
 // Mock de leads para demonstração
-const mockLeads: Lead[] = [
-  {
-    id: '1',
-    nome: 'Maria Silva Santos',
-    email: 'maria.silva@email.com',
-    telefone: '(48) 99999-1234',
-    whatsapp: '48999991234',
-    estagioId: 'interessado',
-    responsavel: 'João Corretor',
-    valor: 450000,
-    origem: 'site',
-    prioridade: 'alta',
-    temperatura: 'quente',
-    dataCriacao: '2025-01-15',
-    ultimoContato: '2025-01-28T14:30:00',
-    proximoFollowUp: '2025-01-31T10:00:00',
-    empreendimento: 'Residencial Solar das Flores',
-    tags: ['qualificado', 'urgente', 'financiamento-aprovado'],
-    score: 85,
-    observacoes: 'Cliente muito interessado, já tem financiamento pré-aprovado'
-  },
-  {
-    id: '2',
-    nome: 'Carlos Eduardo Lima',
-    email: 'carlos.lima@empresa.com',
-    telefone: '(48) 98888-5678',
-    whatsapp: '48988885678',
-    estagioId: 'negociacao',
-    responsavel: 'Ana Corretora',
-    valor: 680000,
-    origem: 'indicacao',
-    prioridade: 'alta',
-    temperatura: 'quente',
-    dataCriacao: '2025-01-10',
-    ultimoContato: '2025-01-29T09:00:00',
-    proximoFollowUp: '2025-02-01T11:00:00',
-    empreendimento: 'Comercial Business Center',
-    tags: ['investidor', 'decisor', 'alta-renda'],
-    score: 92,
-    observacoes: 'Investidor experiente, decisão rápida'
-  },
-  {
-    id: '3',
-    nome: 'Pedro Santos Oliveira',
-    email: 'pedro.oliveira@gmail.com',
-    telefone: '(48) 97777-9012',
-    estagioId: 'lead',
-    responsavel: 'Maria Corretora',
-    valor: undefined,
-    origem: 'redes-sociais',
-    prioridade: 'media',
-    temperatura: 'morno',
-    dataCriacao: '2025-01-25',
-    ultimoContato: '2025-01-26T08:00:00',
-    tags: ['novo', 'primeira-conversa'],
-    score: 45,
-    observacoes: 'Primeiro contato, precisa qualificar melhor'
-  }
-];
+// TODO: Replace with API integration to fetch leads for board
+// Remove mock data and implement proper API calls to backend lead service
+const mockLeads: Lead[] = [];
 
 const formatCurrency = (value?: number) => {
   if (!value) return '-';

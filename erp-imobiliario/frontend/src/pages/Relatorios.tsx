@@ -488,7 +488,7 @@ const Relatorios: React.FC = () => {
                                 (valor.toString().includes('.') ? 
                                   relatoriosService.formatarPercentual(valor) : 
                                   valor.toLocaleString('pt-BR')) : 
-                                valor}
+                                String(valor)}
                             </td>
                           ))}
                         </tr>

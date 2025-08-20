@@ -54,13 +54,22 @@ interface DadosCompletos {
   dataInicioObra?: string;
   dataEntregaObra?: string;
   
-  // Características do imóvel
+  // Características do imóvel - Seção Interesse
   caracteristicasImovel: {
     quartos: number;
     suites: number;
     vagasGaragem: number;
     lazer: string[];
     observacoes: string;
+    // Novos campos de interesse
+    localizacaoPreferida: string;
+    valorMinimoInvestimento: number;
+    valorMaximoInvestimento: number;
+    proximidadeMar: number; // em km
+    andaresPrefere: string; // 'baixos', 'altos', 'intermediarios', 'indiferente'
+    posicaoSolar: string; // 'nascente', 'poente', 'norte', 'sul', 'indiferente'
+    finalidadeInvestimento: 'moradia' | 'investimento' | 'aluguel' | 'revenda';
+    tempoMudanca: string; // 'imediato', '6_meses', '1_ano', 'mais_1_ano'
   };
   
   // Dados bancários
@@ -136,6 +145,15 @@ const FormularioCompletoLead: React.FC<Props> = ({
       vagasGaragem: 1,
       lazer: [],
       observacoes: '',
+      // Novos campos de interesse
+      localizacaoPreferida: '',
+      valorMinimoInvestimento: 0,
+      valorMaximoInvestimento: 0,
+      proximidadeMar: 0,
+      andaresPrefere: 'indiferente',
+      posicaoSolar: 'indiferente',
+      finalidadeInvestimento: 'moradia',
+      tempoMudanca: 'imediato',
       ...dadosIniciais?.caracteristicasImovel
     },
     
@@ -707,6 +725,143 @@ const FormularioCompletoLead: React.FC<Props> = ({
                         <span className="text-sm text-gray-700">{opcao}</span>
                       </label>
                     ))}
+                  </div>
+                </div>
+
+                {/* Seção Interesse Expandida */}
+                <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 space-y-6">
+                  <h4 className="text-md font-semibold text-blue-900 mb-4">📋 Seção Interesse - Perfil Detalhado</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Localização Preferida *
+                      </label>
+                      <input
+                        type="text"
+                        value={dados.caracteristicasImovel.localizacaoPreferida}
+                        onChange={(e) => updateCaracteristicas('localizacaoPreferida', e.target.value)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ex: Centro, Ingleses, Canasvieiras"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Proximidade do Mar (km)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="50"
+                        value={dados.caracteristicasImovel.proximidadeMar}
+                        onChange={(e) => updateCaracteristicas('proximidadeMar', parseFloat(e.target.value) || 0)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ex: 0.5 para 500m"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Valor Mínimo de Investimento
+                      </label>
+                      <input
+                        type="number"
+                        step="1000"
+                        min="0"
+                        value={dados.caracteristicasImovel.valorMinimoInvestimento}
+                        onChange={(e) => updateCaracteristicas('valorMinimoInvestimento', parseInt(e.target.value) || 0)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="R$ 200.000"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Valor Máximo de Investimento
+                      </label>
+                      <input
+                        type="number"
+                        step="1000"
+                        min="0"
+                        value={dados.caracteristicasImovel.valorMaximoInvestimento}
+                        onChange={(e) => updateCaracteristicas('valorMaximoInvestimento', parseInt(e.target.value) || 0)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="R$ 800.000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Preferência de Andares
+                      </label>
+                      <select
+                        value={dados.caracteristicasImovel.andaresPrefere}
+                        onChange={(e) => updateCaracteristicas('andaresPrefere', e.target.value)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="indiferente">Indiferente</option>
+                        <option value="baixos">Andares Baixos (1º ao 5º)</option>
+                        <option value="intermediarios">Andares Intermediários (6º ao 12º)</option>
+                        <option value="altos">Andares Altos (acima do 12º)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Posição Solar Preferida
+                      </label>
+                      <select
+                        value={dados.caracteristicasImovel.posicaoSolar}
+                        onChange={(e) => updateCaracteristicas('posicaoSolar', e.target.value)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="indiferente">Indiferente</option>
+                        <option value="nascente">Nascente (Sol da manhã)</option>
+                        <option value="poente">Poente (Sol da tarde)</option>
+                        <option value="norte">Norte (Sol o dia todo)</option>
+                        <option value="sul">Sul (Menos sol)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Finalidade do Investimento
+                      </label>
+                      <select
+                        value={dados.caracteristicasImovel.finalidadeInvestimento}
+                        onChange={(e) => updateCaracteristicas('finalidadeInvestimento', e.target.value)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="moradia">Moradia Própria</option>
+                        <option value="investimento">Investimento Geral</option>
+                        <option value="aluguel">Renda por Aluguel</option>
+                        <option value="revenda">Revenda Futura</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Tempo para Mudança/Uso
+                      </label>
+                      <select
+                        value={dados.caracteristicasImovel.tempoMudanca}
+                        onChange={(e) => updateCaracteristicas('tempoMudanca', e.target.value)}
+                        className="w-full border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="imediato">Imediato (0-3 meses)</option>
+                        <option value="6_meses">Em até 6 meses</option>
+                        <option value="1_ano">Em até 1 ano</option>
+                        <option value="mais_1_ano">Mais de 1 ano</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 

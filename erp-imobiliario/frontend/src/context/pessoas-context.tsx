@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { PessoasState, PessoasAction, Pessoa, Cliente, Lead } from '../types/pessoa';
-import { gerarMockPessoas } from '../data/mock-pessoas';
+// Removido dados mock - usar API real
 
 // Estado inicial
 const initialState: PessoasState = {
@@ -159,17 +159,11 @@ interface PessoasProviderProps {
 export function PessoasProvider({ children }: PessoasProviderProps) {
   const [state, dispatch] = useReducer(pessoasReducer, initialState);
   
-  // Carregar dados mock na inicialização
+  // Carregar dados reais da API na inicialização
   useEffect(() => {
     dispatch({ type: 'SET_LOADING', payload: true });
-    
-    // Simular carregamento
-    const timer = setTimeout(() => {
-      const mockPessoas = gerarMockPessoas(50);
-      dispatch({ type: 'SET_PESSOAS', payload: mockPessoas });
-    }, 1000);
-    
-    return () => clearTimeout(timer);
+    // TODO: Implementar carregamento real via API
+    dispatch({ type: 'SET_PESSOAS', payload: [] });
   }, []);
   
   return (

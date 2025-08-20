@@ -23,13 +23,13 @@ import {
 import MapaDisponibilidadeComponent from '../components/juridico/MapaDisponibilidade';
 import ModalDetalhesContrato from '../components/juridico/ModalDetalhesContrato';
 
-// Mock data e tipos
-import { 
-  mockContratos, 
-  mockMapaDisponibilidade, 
-  mockEmpreendimentos,
-  calcularRelatorioJuridico 
-} from '../data/mock-juridico';
+// TODO: Substituir por chamadas reais da API
+// import { 
+//   mockContratos, 
+//   mockMapaDisponibilidade, 
+//   mockEmpreendimentos,
+//   calcularRelatorioJuridico 
+// } from '../data/mock-juridico';
 import { ContratoJuridico, UnidadeContrato, DisponibilidadeUnidade } from '../types/juridico';
 
 // Types
@@ -283,103 +283,8 @@ Local e Data: {{cidade}}, {{dataContrato}}`,
   }
 ];
 
-const mockContratosSimples: Contrato[] = [
-  {
-    id: '1',
-    numero: 'CT-2024-001',
-    tipo: 'venda',
-    status: 'em_vigor',
-    cliente: {
-      id: '1',
-      nome: 'João Silva Santos',
-      cpfCnpj: '123.456.789-00',
-      email: 'joao.silva@email.com',
-      telefone: '(11) 99999-9999'
-    },
-    incorporadora: {
-      id: '1',
-      nome: 'Construtora Premium Ltda'
-    },
-    imovel: {
-      id: '1',
-      codigo: 'AP-101-A',
-      endereco: 'Rua das Flores, 123 - Apto 101 Bloco A',
-      empreendimento: 'Residencial Jardim das Flores'
-    },
-    valores: {
-      valorTotal: 450000,
-      valorPago: 180000,
-      saldoDevedor: 270000,
-      formaPagamento: 'Financiamento + Recursos Próprios'
-    },
-    datas: {
-      assinatura: '2024-03-15',
-      inicio: '2024-03-15',
-      fim: '2026-03-15',
-      proximoVencimento: '2024-08-15'
-    },
-    clausulas: {
-      reajuste: 'INCC até entrega das chaves, IPCA após',
-      multa: 2,
-      observacoes: 'Entrega prevista para dezembro/2025'
-    },
-    minutaUsada: 'Contrato de Compra e Venda Padrão',
-    versao: 2,
-    documentos: ['CT-2024-001_v2.pdf', 'RG_Cliente.pdf', 'CPF_Cliente.pdf'],
-    dataInclusao: '2024-03-10',
-    dataAtualizacao: '2024-07-20',
-    assinaturaDigital: {
-      cliente: true,
-      incorporadora: true,
-      dataAssinatura: '2024-03-15'
-    }
-  },
-  {
-    id: '2',
-    numero: 'TR-2024-005',
-    tipo: 'reserva',
-    status: 'pendente',
-    cliente: {
-      id: '2',
-      nome: 'Maria Oliveira Costa',
-      cpfCnpj: '987.654.321-00',
-      email: 'maria.costa@email.com',
-      telefone: '(11) 98888-8888'
-    },
-    incorporadora: {
-      id: '1',
-      nome: 'Construtora Premium Ltda'
-    },
-    imovel: {
-      id: '2',
-      codigo: 'AP-205-B',
-      endereco: 'Av. Central, 456 - Apto 205 Bloco B',
-      empreendimento: 'Edifício Harmony'
-    },
-    valores: {
-      valorTotal: 380000,
-      valorPago: 38000,
-      saldoDevedor: 342000,
-      formaPagamento: 'Sinal + Financiamento'
-    },
-    datas: {
-      inicio: '2024-07-20',
-      proximoVencimento: '2024-08-20'
-    },
-    clausulas: {
-      observacoes: 'Prazo de reserva: 30 dias'
-    },
-    minutaUsada: 'Termo de Reserva',
-    versao: 1,
-    documentos: ['TR-2024-005_v1.pdf'],
-    dataInclusao: '2024-07-20',
-    dataAtualizacao: '2024-07-20',
-    assinaturaDigital: {
-      cliente: false,
-      incorporadora: false
-    }
-  }
-];
+// TODO: Remover dados mock - usar API
+const mockContratosSimples: Contrato[] = [];
 
 const Juridico: React.FC = () => {
   return (
@@ -411,11 +316,13 @@ const MapaContratos: React.FC = () => {
 
   const handleUnidadeSelect = (unidade: UnidadeContrato & DisponibilidadeUnidade) => {
     if (unidade.contrato) {
-      const contrato = mockContratosSimples.find(c => c.id === unidade.contrato?.id);
+      // TODO: Buscar contrato via API
+      const contrato = null;
       if (contrato) {
         // Converter Contrato simples para ContratoJuridico se necessário
         // Por enquanto, usar o contrato dos dados jurídicos
-        const contratoJuridico = mockContratos.find(c => c.numero === contrato.numero);
+        // TODO: Buscar contrato jurídico via API
+        const contratoJuridico = null;
         setContratoSelecionado(contratoJuridico || null);
         setModalDetalhesAberto(true);
       }
@@ -435,7 +342,7 @@ const MapaContratos: React.FC = () => {
       </div>
 
       <MapaDisponibilidadeComponent
-        empreendimentos={mockMapaDisponibilidade}
+        empreendimentos={[]} // TODO: Carregar da API
         onUnidadeSelect={handleUnidadeSelect}
         onFiltroChange={setFiltros}
         filtros={filtros}
@@ -462,9 +369,21 @@ const MapaContratos: React.FC = () => {
 // Overview do módulo
 const JuridicoOverview: React.FC = () => {
   const navigate = useNavigate();
-  const [contratos] = useState<ContratoJuridico[]>(mockContratos);
-  const [minutas] = useState<MinutaTemplate[]>(mockMinutas);
-  const relatorio = calcularRelatorioJuridico();
+  const [contratos] = useState<ContratoJuridico[]>([]);
+  const [minutas] = useState<MinutaTemplate[]>([]);
+  // TODO: Implementar cálculo de relatório via API
+  const relatorio = {
+    totalContratos: 0,
+    contratosPorStatus: {},
+    contratosPorTipo: {},
+    valorTotalCarteira: 0,
+    valorRecebido: 0,
+    valorPendente: 0,
+    contratosComAtraso: 0,
+    valorEmAtraso: 0,
+    mediaValorizacaoUnidades: 0,
+    unidadesMaisValorizadas: []
+  };
 
   const estatisticas = {
     contratosAtivos: contratos.filter(c => c.status === 'ativo').length,
@@ -731,7 +650,7 @@ const processarMinuta = (conteudo: string, variaveis: Record<string, any>): stri
 // Lista de Contratos
 const ContratosList: React.FC = () => {
   const navigate = useNavigate();
-  const [contratos, setContratos] = useState<Contrato[]>(mockContratosSimples);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');

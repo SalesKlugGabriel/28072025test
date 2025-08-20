@@ -336,7 +336,7 @@ export default function ConfiguracaoIntegracoes({ onClose }: ConfiguracaoIntegra
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .configuracao-integracoes {
           position: fixed;
           top: 0;

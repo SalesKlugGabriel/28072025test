@@ -8,6 +8,7 @@ import {
 import ComparadorEmpreendimentos from '../components/ComparadorEmpreendimentos';
 import LandingPageEmpreendimento from '../components/LandingPageEmpreendimento';
 import AtualizadorTabelasEmpreendimento from '../components/AtualizadorTabelasEmpreendimento';
+import ImoveisTerceiros from '../components/ImoveisTerceiros';
 
 // Import das funcionalidades do módulo jurídico
 import { getMinutaById, processarMinuta, type MinutaTemplate } from './Juridico';
@@ -153,160 +154,14 @@ interface FormDataType {
   acabamento: string[];
   ambientes: string[];
   outrasInfo: string[];
+  condicoesPagamento?: string;
+  tabelaPrecos?: File;
 }
 
 function Empreendimentos() {
-  // Mock data limpo e consistente
-  const mockEmpreendimentos: Empreendimento[] = [
-    {
-      id: '1',
-      nome: 'Residencial Solar das Flores',
-      tipo: 'residencial',
-      status: 'vendas',
-      imagem: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800',
-      localizacao: {
-        endereco: 'Rua das Palmeiras, 1500 - Centro',
-        cidade: 'Florianópolis',
-        estado: 'SC',
-        cep: '88010-120',
-        bairro: 'Centro'
-      },
-      unidadesTotal: 120,
-      unidadesVendidas: 45,
-      unidadesReservadas: 25,
-      valorTotal: 'R$ 24.000.000',
-      valorMedio: 350000,
-      dataInicio: '2024-01-15',
-      dataPrevista: '2025-12-30',
-      descricao: 'Empreendimento residencial de alto padrão com 120 unidades, localizado no coração de Florianópolis.',
-      responsaveis: {
-        tecnico: 'Eng. João Silva',
-        comercial: 'Maria Santos',
-        juridico: 'Dr. Carlos Oliveira'
-      },
-      tiposUnidade: [
-        { 
-          id: 'tipo1',
-          nome: 'Tipo 1', 
-          tipologia: '2 quartos', 
-          areaPrivativa: '65m²', 
-          vagas: 1, 
-          valor: 320000,
-          quantidade: 60 
-        },
-        { 
-          id: 'tipo2',
-          nome: 'Tipo 2', 
-          tipologia: '3 quartos', 
-          areaPrivativa: '85m²', 
-          vagas: 2, 
-          valor: 450000,
-          quantidade: 60 
-        }
-      ],
-      blocos: [
-        {
-          id: 'bloco1',
-          nome: 'Bloco A',
-          totalAndares: 10,
-          unidadesPorAndar: 4,
-          tipos: [
-            {
-              id: 'tipo1',
-              nome: 'Tipo 1',
-              tipologia: '2 quartos',
-              areaPrivativa: '65m²',
-              vagas: 1,
-              valor: 320000
-            }
-          ]
-        }
-      ],
-      datas: {
-        inicio: '2024-01-15',
-        previsaoTermino: '2025-12-30'
-      },
-      historicoValores: [
-        { mes: '2024-01', valor: 320000 },
-        { mes: '2024-02', valor: 325000 },
-        { mes: '2024-03', valor: 330000 }
-      ]
-    },
-    {
-      id: '2',
-      nome: 'Comercial Business Center',
-      tipo: 'comercial',
-      status: 'construcao',
-      imagem: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800',
-      localizacao: {
-        endereco: 'Av. Principal, 2000 - Empresarial',
-        cidade: 'São Paulo',
-        estado: 'SP',
-        cep: '01310-100',
-        bairro: 'Empresarial'
-      },
-      unidadesTotal: 50,
-      unidadesVendidas: 20,
-      unidadesReservadas: 15,
-      valorTotal: 'R$ 15.000.000',
-      valorMedio: 250000,
-      dataInicio: '2024-03-01',
-      dataPrevista: '2025-08-15',
-      descricao: 'Centro empresarial moderno com salas comerciais de diversos tamanhos.',
-      responsaveis: {
-        tecnico: 'Eng. Ana Costa',
-        comercial: 'Pedro Lima',
-        juridico: 'Dra. Julia Mendes'
-      },
-      tiposUnidade: [
-        { 
-          id: 'sala1',
-          nome: 'Sala Pequena', 
-          tipologia: 'Comercial', 
-          areaPrivativa: '30m²', 
-          vagas: 1, 
-          valor: 180000,
-          quantidade: 25 
-        },
-        { 
-          id: 'sala2',
-          nome: 'Sala Grande', 
-          tipologia: 'Comercial', 
-          areaPrivativa: '60m²', 
-          vagas: 2, 
-          valor: 350000,
-          quantidade: 25 
-        }
-      ],
-      blocos: [
-        {
-          id: 'bloco1',
-          nome: 'Torre Comercial',
-          totalAndares: 15,
-          unidadesPorAndar: 3,
-          tipos: [
-            {
-              id: 'sala1',
-              nome: 'Sala Pequena',
-              tipologia: 'Comercial',
-              areaPrivativa: '30m²',
-              vagas: 1,
-              valor: 180000
-            }
-          ]
-        }
-      ],
-      datas: {
-        inicio: '2024-03-01',
-        previsaoTermino: '2025-08-15'
-      },
-      historicoValores: [
-        { mes: '2024-01', valor: 250000 },
-        { mes: '2024-02', valor: 255000 },
-        { mes: '2024-03', valor: 260000 }
-      ]
-    }
-  ];
+  // TODO: Replace with API integration to fetch empreendimentos
+  // Remove mock data and implement proper API calls
+  const mockEmpreendimentos: Empreendimento[] = [];
 
   // Função utilitária para formatar moeda
   const formatCurrency = (value: number): string => {
@@ -395,14 +250,24 @@ function Empreendimentos() {
               </button>
               
               {/* Botão Novo */}
-              <button
-                onClick={() => navigate('/empreendimentos/novo')}
-                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors min-w-0"
-              >
-                <Plus className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden sm:block">Novo Empreendimento</span>
-                <span className="sm:hidden">Novo</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => navigate('/empreendimentos/terceiros')}
+                  className="flex items-center justify-center gap-2 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors min-w-0"
+                >
+                  <Home className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:block">Imóveis de Terceiros</span>
+                  <span className="sm:hidden">Terceiros</span>
+                </button>
+                <button
+                  onClick={() => navigate('/empreendimentos/novo')}
+                  className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors min-w-0"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:block">Novo Empreendimento</span>
+                  <span className="sm:hidden">Novo</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -607,10 +472,17 @@ function Empreendimentos() {
                     <span className="text-sm text-gray-500">
                       {emp.blocos.length} {emp.blocos.length === 1 ? 'bloco' : 'blocos'}
                     </span>
-                    <div className="flex items-center text-blue-600 text-sm font-medium">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Modal ou página de detalhes específicos da unidade
+                        alert(`Detalhes da unidade - Funcionalidade em desenvolvimento`);
+                      }}
+                      className="flex items-center text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors px-3 py-1 rounded-lg hover:bg-blue-50"
+                    >
                       Ver detalhes
                       <Eye className="h-4 w-4 ml-1" />
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1352,6 +1224,64 @@ function Empreendimentos() {
             </div>
           </div>
 
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="font-medium text-gray-900 mb-4">Condições de Pagamento</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Condições de Pagamento Padrão</label>
+                <textarea
+                  value={formData.condicoesPagamento || ''}
+                  onChange={(e) => setFormData({...formData, condicoesPagamento: e.target.value})}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ex: Sinal de 30%, Financiamento de 70% em até 240 meses, FGTS aceito, Parcelamento da entrada em até 10x sem juros"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload da Tabela de Preços</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                  <input
+                    type="file"
+                    accept=".pdf,.xlsx,.xls,.docx,.doc"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setFormData({...formData, tabelaPrecos: file});
+                        // Simular processamento IA (placeholder)
+                        setTimeout(() => {
+                          alert('Tabela processada com sucesso! IA identificou as condições de pagamento.');
+                        }, 2000);
+                      }
+                    }}
+                    className="hidden"
+                    id="tabela-precos"
+                  />
+                  <label 
+                    htmlFor="tabela-precos" 
+                    className="cursor-pointer flex flex-col items-center"
+                  >
+                    <div className="text-gray-400 mb-2">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-gray-600">Clique para fazer upload da tabela</span>
+                    <span className="text-xs text-gray-500">PDF, Excel, Word - Máx 10MB</span>
+                  </label>
+                  {formData.tabelaPrecos && (
+                    <div className="mt-2 text-sm text-green-600">
+                      📄 {formData.tabelaPrecos.name} - Upload concluído
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Nossa IA irá analisar automaticamente a tabela e extrair as condições de pagamento
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Outras Informações</label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -1522,8 +1452,8 @@ function Empreendimentos() {
     ];
 
     return (
-      <div className="max-w-7xl mx-auto h-full flex flex-col">
-        {/* Header com foto de capa */}
+      <div className="max-w-7xl mx-auto">
+        {/* Header com foto de capa - Não fixo, rola com a página */}
         <div className="relative h-64 bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg overflow-hidden mb-6">
           <img 
             src={empreendimento.imagem} 
@@ -1607,8 +1537,8 @@ function Empreendimentos() {
         </div>
 
         {/* Conteúdo das abas */}
-        <div className="bg-white rounded-lg shadow-sm border flex-1 min-h-0">
-          <div className="h-full overflow-y-auto p-6">
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="p-6">
             {abaAtiva === 'informacoes' && <AbaInformacoes empreendimento={empreendimento} />}
             {abaAtiva === 'tabelas' && <AbaTabelas empreendimento={empreendimento} />}
             {abaAtiva === 'mapa' && <AbaMapaDisponibilidade empreendimento={empreendimento} onReserva={(unidade) => setModalReserva({ unidade, empreendimento })} />}
@@ -2048,7 +1978,8 @@ function Empreendimentos() {
     const gerarStatus = () => {
       const r = Math.random();
       if (r > 0.9) return 'vendido';
-      if (r > 0.8) return 'reservado';
+      if (r > 0.85) return 'reservado';
+      if (r > 0.8) return 'terceiro'; // Novo status para imóveis de terceiros
       if (r > 0.7) return 'diferente';
       if (r > 0.6) return 'indisponivel';
       return 'disponivel';
@@ -2056,7 +1987,7 @@ function Empreendimentos() {
 
     useEffect(() => {
       const inicial: { numero: number; status: string }[] = [];
-      for (let andar = 10; andar >= 1; andar--) {
+      for (let andar = 20; andar >= 1; andar--) {
         for (let apto = 1; apto <= 4; apto++) {
           inicial.push({ numero: andar * 100 + apto, status: gerarStatus() });
         }
@@ -2073,28 +2004,35 @@ function Empreendimentos() {
       disponivel: 'bg-green-500',
       reservado: 'bg-yellow-500',
       vendido: 'bg-red-500',
+      terceiro: 'bg-yellow-400 border-2 border-yellow-600', // Cor dourada para terceiros
       diferente: 'bg-blue-500',
       indisponivel: 'bg-gray-500'
     } as const;
 
     return (
-      <div className="space-y-6 flex flex-col items-center">
+      <div className="space-y-6">
+        {/* Legenda fixa no topo */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Legenda</h3>
           <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded"></div><span className="text-sm text-gray-700">Disponível</span></div>
             <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-500 rounded"></div><span className="text-sm text-gray-700">Reservado</span></div>
             <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-500 rounded"></div><span className="text-sm text-gray-700">Vendido</span></div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-400 border-2 border-yellow-600 rounded"></div><span className="text-sm text-gray-700">Terceiro (Dourado)</span></div>
             <div className="flex items-center gap-2"><div className="w-4 h-4 bg-blue-500 rounded"></div><span className="text-sm text-gray-700">Diferente</span></div>
             <div className="flex items-center gap-2"><div className="w-4 h-4 bg-gray-500 rounded"></div><span className="text-sm text-gray-700">Indisponível</span></div>
           </div>
         </div>
-        <div className="bg-gray-50 rounded-lg p-6 flex flex-col items-center relative">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Distribuição das Unidades</h3>
+        
+        {/* Mapa de disponibilidade com scroll completo */}
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">Distribuição das Unidades</h3>
 
-          <div className="space-y-4 flex flex-col items-center">
-            {Array.from({ length: 10 }, (_, andar) => {
-              const numeroAndar = 10 - andar;
+          {/* Container do mapa sem limitação de altura */}
+          <div className="flex justify-center">
+            <div className="space-y-3">
+              {Array.from({ length: 20 }, (_, andar) => {
+                const numeroAndar = 20 - andar; // Começa do 20º andar e vai até o 1º
               return (
                 <div key={numeroAndar} className="flex items-center gap-4">
                   <div className="w-12 text-center text-sm font-medium text-gray-600">{numeroAndar}º</div>
@@ -2130,10 +2068,12 @@ function Empreendimentos() {
                 </div>
               );
             })}
+            </div>
           </div>
 
           <div className="mt-6 text-center text-gray-500 text-sm">
             <p>Clique nas unidades para ver mais detalhes</p>
+            <p className="text-xs mt-1">Mostrando {20} andares - Scroll completo habilitado</p>
           </div>
         </div>
 
@@ -2144,7 +2084,13 @@ function Empreendimentos() {
             </button>
             <h4 className="font-semibold mb-2">Unidade {tooltip.unidade.numero}</h4>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-3">
-              <div><span className="font-medium">Status:</span> {tooltip.unidade.status}</div>
+              <div><span className="font-medium">Status:</span> 
+                {tooltip.unidade.status === 'terceiro' ? (
+                  <span className="text-yellow-600 font-bold">Imóvel de Terceiro</span>
+                ) : (
+                  tooltip.unidade.status
+                )}
+              </div>
               <div><span className="font-medium">Tipologia:</span> {tooltip.unidade.tipologia}</div>
               <div><span className="font-medium">Planta:</span> {tooltip.unidade.planta}</div>
               <div><span className="font-medium">Vagas:</span> {tooltip.unidade.vagas}</div>
@@ -2153,6 +2099,13 @@ function Empreendimentos() {
               <div><span className="font-medium">Área privativa:</span> {tooltip.unidade.areaPrivativa}</div>
               <div><span className="font-medium">Área total:</span> {tooltip.unidade.areaTotal}</div>
             </div>
+            
+            {tooltip.unidade.status === 'terceiro' && (
+              <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                <div className="font-medium text-yellow-800">🏠 Imóvel de Terceiro</div>
+                <div className="text-yellow-700">Este imóvel pertence a um proprietário externo e possui condições especiais de comissão.</div>
+              </div>
+            )}
             {tooltip.unidade.status === 'disponivel' && (
               <div className="flex gap-2">
                 <button 
@@ -2164,7 +2117,13 @@ function Empreendimentos() {
                 >
                   Reservar Unidade
                 </button>
-                <button className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors">
+                <button 
+                  onClick={() => {
+                    // Abrir modal detalhado da unidade
+                    alert(`Detalhes da unidade ${tooltip.unidade.numero} - Funcionalidade em desenvolvimento`);
+                  }}
+                  className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                >
                   Ver Detalhes
                 </button>
               </div>
@@ -2934,7 +2893,10 @@ Arquivo baixado automaticamente.`);
           </div>
           <div className="flex space-x-3">
             <button 
-              onClick={() => navigate(`/empreendimentos/detalhes/${empreendimentoId}`)}
+              onClick={() => {
+                // Abrir detalhes específicos do empreendimento com unidades
+                alert(`Detalhes completos do empreendimento - Funcionalidade em desenvolvimento`);
+              }}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Ver Detalhes
@@ -2976,6 +2938,7 @@ Arquivo baixado automaticamente.`);
           <Route path="mapa/:id" element={<MapaDisponibilidade />} />
           <Route path="landing/:id" element={<LandingPageEmpreendimento />} />
           <Route path="atualizador-tabelas" element={<AtualizadorTabelasEmpreendimento />} />
+          <Route path="terceiros" element={<ImoveisTerceiros />} />
         </Routes>
       </div>
     </div>

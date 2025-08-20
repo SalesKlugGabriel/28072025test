@@ -4,8 +4,9 @@ import { ConversationList } from './ConversationList';
 import { ChatArea } from './ChatArea';
 import { CustomerInteractions } from './CustomerInteractions';
 import { AdminMonitoring } from './AdminMonitoring';
+import { CustomerTags } from './CustomerTags';
 import { whatsappService } from '../../services/whatsappService';
-import { EyeIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, FunnelIcon } from '@heroicons/react/24/outline';
 
 interface WhatsAppChatProps {
   connection: WhatsAppConnection;
@@ -22,6 +23,8 @@ export interface Conversation {
   unreadCount: number;
   avatar?: string;
   isOnline: boolean;
+  tags?: string[];
+  leadId?: string;
 }
 
 export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({ 
@@ -34,7 +37,12 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [showCustomerInteractions, setShowCustomerInteractions] = useState(false);
   const [showAdminMonitoring, setShowAdminMonitoring] = useState(false);
+  const [showTagFilter, setShowTagFilter] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Tags disponíveis
+  const availableTags = ['agro', 'tech', 'fin', 'com', 'quente', 'morno', 'frio', 'interessado', 'negociacao', 'proposta'];
 
   useEffect(() => {
     loadConversations();
@@ -70,6 +78,8 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
           phoneNumber: '+5511999999999',
           unreadCount: 2,
           isOnline: true,
+          tags: ['agro', 'interessado', 'quente'],
+          leadId: 'lead_001',
           lastMessage: {
             id: 'msg1',
             connectionId: connection.id,
@@ -88,6 +98,8 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
           phoneNumber: '+5511888888888',
           unreadCount: 0,
           isOnline: false,
+          tags: ['tech', 'negociacao', 'morno'],
+          leadId: 'lead_002',
           lastMessage: {
             id: 'msg2',
             connectionId: connection.id,
@@ -106,6 +118,8 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
           phoneNumber: '+5511777777777',
           unreadCount: 1,
           isOnline: true,
+          tags: ['fin', 'interessado', 'quente'],
+          leadId: 'lead_003',
           lastMessage: {
             id: 'msg3',
             connectionId: connection.id,
@@ -124,6 +138,8 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
           phoneNumber: '+5511666666666',
           unreadCount: 0,
           isOnline: false,
+          tags: ['com', 'proposta', 'frio'],
+          leadId: 'lead_004',
           lastMessage: {
             id: 'msg4',
             connectionId: connection.id,
@@ -142,6 +158,8 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
           phoneNumber: '+5511555555555',
           unreadCount: 3,
           isOnline: true,
+          tags: ['agro', 'negociacao', 'quente'],
+          leadId: 'lead_005',
           lastMessage: {
             id: 'msg5',
             connectionId: connection.id,
@@ -352,6 +370,22 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
     }
   };
 
+  // Função para filtrar conversas por tags
+  const filteredConversations = selectedTags.length === 0 
+    ? conversations 
+    : conversations.filter(conversation => 
+        conversation.tags?.some(tag => selectedTags.includes(tag))
+      );
+
+  // Função para alternar seleção de tag
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -372,8 +406,57 @@ export const WhatsAppChat: React.FC<WhatsAppChatProps> = ({
     <div className="h-screen flex bg-gray-100">
       {/* Lista de conversas */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+        {/* Filtro de Tags */}
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-900">Filtrar por Tags</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTagFilter(!showTagFilter)}
+                className="p-1 hover:bg-gray-200 rounded-md transition-colors"
+                title="Filtrar por tags"
+              >
+                <TagIcon className="w-4 h-4 text-gray-600" />
+              </button>
+              <button
+                onClick={() => setSelectedTags([])}
+                className="p-1 hover:bg-gray-200 rounded-md transition-colors"
+                title="Limpar filtros"
+              >
+                <FunnelIcon className="w-4 h-4 text-gray-600" />
+              </button>
+            </div>
+          </div>
+          
+          {showTagFilter && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className={`px-2 py-1 text-xs rounded-full border transition-all ${
+                      selectedTags.includes(tag)
+                        ? 'bg-blue-100 border-blue-300 text-blue-700'
+                        : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+              
+              {selectedTags.length > 0 && (
+                <div className="text-xs text-gray-500">
+                  {filteredConversations.length} conversa(s) encontrada(s)
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <ConversationList
-          conversations={conversations}
+          conversations={filteredConversations}
           selectedConversation={selectedConversation}
           onSelectConversation={handleSelectConversation}
           connection={connection}

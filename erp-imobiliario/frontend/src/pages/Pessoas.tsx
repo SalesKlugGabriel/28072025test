@@ -1117,10 +1117,9 @@ function PerfilPessoa() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Classificação</label>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    (pessoa as Cliente).classificacao === 'vip' ? 'bg-gold-100 text-gold-800' :
-                    (pessoa as Cliente).classificacao === 'premium' ? 'bg-purple-100 text-purple-800' :
-                    (pessoa as Cliente).classificacao === 'gold' ? 'bg-yellow-100 text-yellow-800' :
-                    (pessoa as Cliente).classificacao === 'silver' ? 'bg-gray-100 text-gray-800' :
+                    (pessoa as Cliente).classificacao === 'diamante' ? 'bg-purple-100 text-purple-800' :
+                    (pessoa as Cliente).classificacao === 'ouro' ? 'bg-yellow-100 text-yellow-800' :
+                    (pessoa as Cliente).classificacao === 'prata' ? 'bg-gray-100 text-gray-800' :
                     'bg-orange-100 text-orange-800'
                   }`}>
                     {(pessoa as Cliente).classificacao}

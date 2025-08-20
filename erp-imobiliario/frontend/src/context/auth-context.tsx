@@ -194,21 +194,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     carregarUsuario();
   }, []);
   
-  // Login
+  // Login com fallback para múltiplas URLs
   const login = async (email: string, senha: string) => {
     dispatch({ type: 'LOGIN_START' });
     
     try {
-      // Simular autenticação (substituir por API real)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const usuario = MOCK_USUARIOS[email];
-      
-      if (!usuario || senha !== '123456') {
-        throw new Error('Email ou senha incorretos');
+      // URLs possíveis para tentar
+      const apiUrls = [
+        import.meta.env.VITE_API_URL,
+        'https://literate-zebra-5gpqx59g4rv9c4g5j-3001.app.github.dev',
+        'http://localhost:3001',
+        `https://${window.location.hostname.replace('5173', '3001')}`
+      ].filter(Boolean);
+
+      let response;
+      let lastError;
+
+      // Tentar cada URL até uma funcionar
+      for (const apiUrl of apiUrls) {
+        try {
+          console.log(`🔄 Tentando login em: ${apiUrl}`);
+          response = await fetch(`${apiUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, senha }),
+            mode: 'cors'
+          });
+
+          if (response.ok) {
+            console.log(`✅ Login bem-sucedido via: ${apiUrl}`);
+            break;
+          }
+        } catch (error) {
+          console.log(`❌ Falha em ${apiUrl}:`, error);
+          lastError = error;
+          continue;
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw lastError || new Error('Todas as tentativas de conexão falharam');
       }
       
-      const token = `mock_token_${Date.now()}`;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao fazer login');
+      }
+      
+      const data = await response.json();
+      
+      // Adaptar dados do backend para o formato esperado
+      const usuario: Usuario = {
+        id: data.user.id,
+        nome: data.user.nome,
+        email: data.user.email,
+        perfil: data.user.perfil.toLowerCase() as PerfilUsuario,
+        telefone: data.user.telefone || '',
+        departamento: data.user.departamento || 'Vendas',
+        dataAdmissao: '2024-01-01', // Placeholder
+        status: 'ativo',
+        configuracoes: {
+          notificacoes: true,
+          tema: 'claro',
+          idioma: 'pt-BR'
+        }
+      };
+      
+      const token = data.accessToken;
       
       // Salvar no localStorage
       localStorage.setItem('legasys_token', token);
@@ -229,7 +283,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       dispatch({ type: 'LOGIN_SUCCESS', payload: { usuario, token } });
     } catch (error) {
-      dispatch({ type: 'LOGIN_ERROR', payload: error instanceof Error ? error.message : 'Erro desconhecido' });
+      dispatch({ type: 'LOGIN_ERROR', payload: error instanceof Error ? error.message : 'Erro de conexão' });
+      throw error;
     }
   };
   

@@ -1,0 +1,882 @@
+// Prisma Schema para ERP Imobiliário
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// SISTEMA MULTI-TENANT - ORGANIZAÇÕES
+// ========================================
+
+model Organizacao {
+  id              String   @id @default(uuid())
+  nome            String
+  cnpj            String?  @unique
+  razaoSocial     String?
+  telefone        String?
+  email           String?
+  
+  // Configurações da org
+  plano           PlanoType @default(BASICO)
+  maxUsuarios     Int       @default(25)
+  ativo           Boolean   @default(true)
+  
+  // Subdomain para isolamento
+  subdominio      String    @unique
+  
+  // Configurações personalizadas
+  configuracoes   Json?
+  
+  // Metadados
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relacionamentos
+  usuarios        User[]
+  pessoas         Pessoa[]
+  leads           Lead[]
+  clientes        Cliente[]
+  empreendimentos Empreendimento[]
+  boards          Board[]
+  escalas         EscalaPlantao[]
+  regioes         RegiaoAtendimento[]
+  
+  @@map("organizacoes")
+}
+
+enum PlanoType {
+  BASICO
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+// ========================================
+// SISTEMA DE USUÁRIOS E AUTENTICAÇÃO
+// ========================================
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  nome            String
+  senha           String
+  perfil          UserRole @default(CORRETOR)
+  ativo           Boolean  @default(true)
+  avatar          String?
+  telefone        String?
+  ddd             String?
+  
+  // Multi-tenant
+  organizacaoId   String
+  organizacao     Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Configurações do corretor
+  statusAtendimento StatusAtendimento @default(DISPONIVEL)
+  recebendoLeads    Boolean @default(true)
+  
+  // Metadados
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastLogin       DateTime?
+  
+  // Relacionamentos
+  pessoas         Pessoa[]
+  leads           Lead[]
+  clientes        Cliente[]
+  refreshTokens   RefreshToken[]
+  escalas         EscalaPlantao[]
+  regioesAtendidas RegiaoAtendimento[]
+  distribuicoes   DistribuicaoLead[]
+  
+  @@map("users")
+}
+
+enum StatusAtendimento {
+  DISPONIVEL
+  OCUPADO
+  AUSENTE
+  OFFLINE
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("refresh_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  @@map("password_resets")
+}
+
+enum UserRole {
+  ADMIN
+  GERENTE
+  CORRETOR
+  ENGENHEIRO
+  ARQUITETO
+  JURIDICO
+  FINANCEIRO
+}
+
+// ========================================
+// PESSOAS (BASE PARA LEADS/CLIENTES/ETC)
+// ========================================
+
+model Pessoa {
+  id                    String      @id @default(uuid())
+  tipo                  TipoPessoa
+  pessoaFisica          Boolean     @default(true)
+  
+  // Multi-tenant
+  organizacaoId         String
+  organizacao           Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Dados básicos obrigatórios
+  nome                  String
+  cpfCnpj               String
+  telefone              String
+  email                 String
+  
+  // Dados opcionais comuns
+  nomeFantasia          String?
+  rgInscricaoEstadual   String?
+  telefoneSecundario    String?
+  emailSecundario       String?
+  
+  // Endereço (JSON)
+  endereco              Json
+  
+  // Campos de gestão
+  tags                  String[]
+  observacoes           String?
+  linkVideoCall         String?
+  
+  // Metadados
+  status                StatusPessoa @default(ATIVO)
+  dataInclusao          DateTime     @default(now())
+  dataAtualizacao       DateTime     @updatedAt
+  
+  // Relacionamentos
+  userId                String
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responsavel           String?
+  
+  documentos            Documento[]
+  
+  // Conversões específicas
+  leads                 Lead[]
+  clientes              Cliente[]
+  fornecedores          Fornecedor[]
+  colaboradoresPF       ColaboradorPF[]
+  colaboradoresPJ       ColaboradorPJ[]
+  
+  @@map("pessoas")
+}
+
+enum TipoPessoa {
+  CLIENTE
+  LEAD
+  FORNECEDOR
+  COLABORADOR_PF
+  COLABORADOR_PJ
+}
+
+enum StatusPessoa {
+  ATIVO
+  INATIVO
+  SUSPENSO
+}
+
+// ========================================
+// LEADS - CRM
+// ========================================
+
+model Lead {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  // Multi-tenant
+  organizacaoId         String
+  organizacao           Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Dados específicos de Lead
+  origemContato         String
+  interesseImovel       String[]
+  orcamentoMinimo       Decimal?
+  orcamentoMaximo       Decimal?
+  prazoCompra           String?
+  statusLeadCrm         String?
+  ultimaInteracao       DateTime?
+  pontuacao             Int?     @default(0)
+  responsavelCRM        String?
+  
+  // Relacionamentos
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Movimentações no CRM
+  movimentacoes         MovimentacaoLead[]
+  followUps             FollowUp[]
+  distribuicao          DistribuicaoLead?
+  
+  @@map("leads")
+}
+
+// ========================================
+// CLIENTES
+// ========================================
+
+model Cliente {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  // Multi-tenant
+  organizacaoId         String
+  organizacao           Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Dados específicos de Cliente
+  valorTotalInvestido   Decimal  @default(0)
+  valorPatrimonioAtual  Decimal  @default(0)
+  dataUltimaCompra      DateTime?
+  origemContato         String
+  classificacao         ClassificacaoCliente @default(BRONZE)
+  
+  // Dados específicos PF/PJ (JSON)
+  dadosPF               Json?
+  dadosPJ               Json?
+  
+  // Relacionamentos
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  unidadesAdquiridas    UnidadeAdquirida[]
+  
+  @@map("clientes")
+}
+
+enum ClassificacaoCliente {
+  BRONZE
+  PRATA
+  OURO
+  DIAMANTE
+}
+
+// ========================================
+// FORNECEDORES
+// ========================================
+
+model Fornecedor {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  // Dados específicos
+  produtosServicos      String[]
+  categoria             String
+  contratoVigente       Boolean  @default(false)
+  dataInicioContrato    DateTime?
+  dataFimContrato       DateTime?
+  avaliacaoQualidade    Int?
+  tempoMedioPagamento   Int?
+  condicoesPagamento    String
+  
+  // Dados bancários (JSON)
+  dadosBancarios        Json?
+  
+  // Relacionamentos
+  userId                String
+  
+  @@map("fornecedores")
+}
+
+// ========================================
+// COLABORADORES
+// ========================================
+
+model ColaboradorPF {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  // Dados trabalhistas
+  cargo                 String
+  departamento          String
+  dataAdmissao          DateTime
+  dataDemissao          DateTime?
+  salario               Decimal?
+  beneficios            String[]
+  situacaoTrabalhista   SituacaoTrabalhista @default(ATIVO)
+  supervisor            String?
+  
+  // Documentos específicos (JSON)
+  dadosTrabalho         Json
+  
+  // Relacionamentos
+  userId                String
+  
+  @@map("colaboradores_pf")
+}
+
+model ColaboradorPJ {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  // Dados do contrato
+  servicosPrestados     String[]
+  valorContrato         Decimal?
+  dataInicioContrato    DateTime
+  dataFimContrato       DateTime?
+  avaliacaoServico      Int?
+  renovacaoAutomatica   Boolean  @default(false)
+  
+  // Dados específicos PJ (JSON)
+  dadosPJ               Json
+  
+  // Relacionamentos
+  userId                String
+  
+  @@map("colaboradores_pj")
+}
+
+enum SituacaoTrabalhista {
+  ATIVO
+  AFASTADO
+  DEMITIDO
+  APOSENTADO
+}
+
+// ========================================
+// EMPREENDIMENTOS
+// ========================================
+
+model Empreendimento {
+  id                    String   @id @default(uuid())
+  nome                  String
+  descricao             String?
+  endereco              Json
+  status                StatusEmpreendimento @default(PLANEJAMENTO)
+  dataLancamento        DateTime?
+  dataEntrega           DateTime?
+  valorM2               Decimal?
+  
+  // Multi-tenant
+  organizacaoId         String
+  organizacao           Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Características
+  tipoEmpreendimento    String
+  totalUnidades         Int?
+  areaTotal             Decimal?
+  
+  // Metadados
+  ativo                 Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relacionamentos
+  userId                String
+  unidades              Unidade[]
+  unidadesAdquiridas    UnidadeAdquirida[]
+  
+  @@map("empreendimentos")
+}
+
+model Unidade {
+  id                    String         @id @default(uuid())
+  empreendimentoId      String
+  empreendimento        Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  numero                String
+  bloco                 String?
+  andar                 Int?
+  tipo                  String         // Studio, 1 dorm, 2 dorm, etc
+  area                  Decimal?
+  vagas                 Int?
+  
+  // Valores
+  valorBase             Decimal
+  valorAtual            Decimal
+  status                StatusUnidade  @default(DISPONIVEL)
+  
+  // Relacionamentos
+  unidadesAdquiridas    UnidadeAdquirida[]
+  
+  @@map("unidades")
+}
+
+model UnidadeAdquirida {
+  id                    String         @id @default(uuid())
+  clienteId             String
+  cliente               Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  empreendimentoId      String
+  empreendimento        Empreendimento @relation(fields: [empreendimentoId], references: [id], onDelete: Cascade)
+  unidadeId             String?
+  unidade               Unidade?       @relation(fields: [unidadeId], references: [id])
+  
+  // Dados da compra
+  unidadeNumero         String         // Backup se não tiver unidade específica
+  bloco                 String?
+  andar                 Int?
+  valorCompra           Decimal
+  valorAtual            Decimal
+  status                StatusCompra   @default(CONTRATO)
+  dataAquisicao         DateTime
+  dataEntrega           DateTime?
+  
+  // Histórico de valores (JSON)
+  historicoValores      Json[]
+  
+  @@map("unidades_adquiridas")
+}
+
+enum StatusEmpreendimento {
+  PLANEJAMENTO
+  LANCAMENTO
+  CONSTRUCAO
+  ENTREGUE
+  FINALIZADO
+}
+
+enum StatusUnidade {
+  DISPONIVEL
+  RESERVADA
+  VENDIDA
+  ENTREGUE
+}
+
+enum StatusCompra {
+  CONTRATO
+  FINANCIAMENTO
+  QUITADO
+  PENDENTE
+}
+
+// ========================================
+// CRM - BOARDS E AUTOMAÇÕES
+// ========================================
+
+model Board {
+  id                    String   @id @default(uuid())
+  nome                  String
+  descricao             String?
+  cor                   String
+  icone                 String
+  ordem                 Int
+  ativo                 Boolean  @default(true)
+  tipo                  BoardType
+  
+  // Multi-tenant
+  organizacaoId         String
+  organizacao           Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Relacionamentos
+  userId                String
+  estagios              Estagio[]
+  automacoes            AutomacaoBoard[]
+  movimentacoes         MovimentacaoLead[]
+  
+  @@map("boards")
+}
+
+model Estagio {
+  id                    String   @id @default(uuid())
+  boardId               String
+  board                 Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  
+  nome                  String
+  descricao             String?
+  cor                   String
+  ordem                 Int
+  tipo                  TipoEstagio
+  
+  // Configurações (JSON)
+  configuracoes         Json
+  
+  // Relacionamentos
+  movimentacoes         MovimentacaoLead[]
+  
+  @@map("estagios")
+}
+
+model MovimentacaoLead {
+  id                    String   @id @default(uuid())
+  leadId                String
+  lead                  Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  boardId               String
+  board                 Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  estagioId             String
+  estagio               Estagio  @relation(fields: [estagioId], references: [id], onDelete: Cascade)
+  
+  // Dados da movimentação
+  estagioOrigem         String?
+  motivo                String?
+  observacoes           String?
+  posicao               Int      @default(0)
+  automatica            Boolean  @default(false)
+  
+  // Metadados
+  data                  DateTime @default(now())
+  usuario               String
+  
+  @@map("movimentacoes_lead")
+}
+
+model AutomacaoBoard {
+  id                    String   @id @default(uuid())
+  boardId               String
+  board                 Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  
+  nome                  String
+  descricao             String?
+  ativo                 Boolean  @default(true)
+  
+  // Configurações (JSON)
+  condicoes             Json[]
+  acoes                 Json[]
+  configuracoes         Json
+  
+  // Estatísticas
+  totalExecucoes        Int      @default(0)
+  ultimaExecucao        DateTime?
+  sucessos              Int      @default(0)
+  erros                 Int      @default(0)
+  
+  // Metadados
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("automacoes_board")
+}
+
+model FollowUp {
+  id                    String   @id @default(uuid())
+  leadId                String
+  lead                  Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  tipo                  TipoFollowUp
+  titulo                String
+  descricao             String?
+  dataAgendamento       DateTime
+  status                StatusFollowUp @default(AGENDADO)
+  prioridade            PrioridadeFollowUp @default(MEDIA)
+  responsavel           String
+  automacaoId           String?
+  
+  // Configurações (JSON)
+  configuracoes         Json?
+  
+  // Metadados
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("follow_ups")
+}
+
+enum BoardType {
+  VENDAS
+  POS_VENDA
+  AUTOMACAO
+}
+
+enum TipoEstagio {
+  INICIAL
+  INTERMEDIARIO
+  FINAL
+  PERDIDO
+}
+
+enum TipoFollowUp {
+  LIGACAO
+  WHATSAPP
+  EMAIL
+  REUNIAO
+  VISITA
+}
+
+enum StatusFollowUp {
+  AGENDADO
+  EXECUTADO
+  CANCELADO
+  REAGENDADO
+}
+
+enum PrioridadeFollowUp {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+// ========================================
+// DOCUMENTOS
+// ========================================
+
+model Documento {
+  id                    String   @id @default(uuid())
+  pessoaId              String
+  pessoa                Pessoa   @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  
+  tipo                  String
+  categoria             CategoriaDocumento
+  nomeArquivo           String
+  arquivoUrl            String?
+  tamanho               Int?
+  mimeType              String?
+  
+  // Metadados
+  dataUpload            DateTime @default(now())
+  uploadedBy            String
+  
+  @@map("documentos")
+}
+
+enum CategoriaDocumento {
+  DOCUMENTACAO_PESSOAL
+  CONTRATOS
+  ADVERTENCIAS
+  ATESTADOS_MEDICOS
+  OUTROS
+}
+
+// ========================================
+// WHATSAPP
+// ========================================
+
+model WhatsAppSession {
+  id                    String   @id @default(uuid())
+  userId                String
+  sessionName           String   @unique
+  qrCode                String?
+  status                WhatsAppStatus @default(DISCONNECTED)
+  
+  // Configurações
+  autoReply             Boolean  @default(false)
+  welcomeMessage        String?
+  
+  // Metadados
+  connectedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relacionamentos
+  conversas             WhatsAppConversation[]
+  
+  @@map("whatsapp_sessions")
+}
+
+model WhatsAppConversation {
+  id                    String   @id @default(uuid())
+  sessionId             String
+  session               WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  phoneNumber           String
+  contactName           String?
+  leadId                String?
+  
+  // Status
+  status                ConversationStatus @default(ATIVA)
+  lastMessageAt         DateTime?
+  
+  // Metadados
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relacionamentos
+  mensagens             WhatsAppMessage[]
+  
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id                    String   @id @default(uuid())
+  conversationId        String
+  conversation          WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  messageId             String   @unique
+  fromNumber            String
+  toNumber              String
+  content               String
+  messageType           MessageType @default(TEXT)
+  
+  // Status
+  isFromMe              Boolean
+  status                MessageStatus @default(SENT)
+  
+  // Metadados
+  timestamp             DateTime
+  createdAt             DateTime @default(now())
+  
+  @@map("whatsapp_messages")
+}
+
+enum WhatsAppStatus {
+  CONNECTED
+  DISCONNECTED
+  CONNECTING
+  QR_CODE
+  ERROR
+}
+
+enum ConversationStatus {
+  ATIVA
+  ARQUIVADA
+  BLOQUEADA
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  LOCATION
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ========================================
+// SISTEMA DE ESCALA DE PLANTÃO
+// ========================================
+
+model EscalaPlantao {
+  id            String   @id @default(uuid())
+  organizacaoId String
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  usuarioId     String
+  usuario       User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  
+  // Data e horário da escala
+  dataInicio    DateTime
+  dataFim       DateTime
+  diaSemana     Int      // 1-7 (segunda a domingo)
+  
+  // Status do plantão
+  ativo         Boolean  @default(true)
+  status        StatusPlantao @default(AGENDADO)
+  
+  // Configurações
+  receberLeads  Boolean  @default(true)
+  prioridade    Int      @default(1) // 1 = menor prioridade
+  
+  // Observações
+  observacoes   String?
+  
+  // Metadados
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String
+  
+  @@map("escala_plantao")
+}
+
+enum StatusPlantao {
+  AGENDADO
+  ATIVO
+  CONCLUIDO
+  CANCELADO
+}
+
+// ========================================
+// SISTEMA DE DISTRIBUIÇÃO POR REGIÃO
+// ========================================
+
+model RegiaoAtendimento {
+  id            String   @id @default(uuid())
+  organizacaoId String
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  
+  // Definição da região
+  nome          String
+  ddds          String[] // Array de DDDs que a região atende
+  estados       String[] // Estados cobertos
+  cidades       String[] // Cidades específicas (opcional)
+  
+  // Configurações de distribuição
+  ativo         Boolean  @default(true)
+  distribuicaoTipo DistribuicaoTipo @default(ROUND_ROBIN)
+  
+  // Relacionamentos
+  corretores    User[]
+  distribuicoes DistribuicaoLead[]
+  
+  // Metadados
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("regioes_atendimento")
+}
+
+enum DistribuicaoTipo {
+  ROUND_ROBIN    // Distribuição circular
+  PRIORIDADE     // Por prioridade/pontuação
+  DISPONIBILIDADE // Por disponibilidade
+  MANUAL         // Distribuição manual
+}
+
+// ========================================
+// CONTROLE DE DISTRIBUIÇÃO DE LEADS
+// ========================================
+
+model DistribuicaoLead {
+  id              String   @id @default(uuid())
+  leadId          String   @unique
+  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // Dados da distribuição
+  usuarioId       String
+  usuario         User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  
+  regiaoId        String?
+  regiao          RegiaoAtendimento? @relation(fields: [regiaoId], references: [id])
+  
+  // Controle de distribuição
+  dataDistribuicao DateTime @default(now())
+  automatica      Boolean  @default(true)
+  tentativas      Int      @default(1)
+  
+  // Status
+  status          StatusDistribuicao @default(DISTRIBUIDO)
+  motivo          String?
+  
+  // Metadados de plantão
+  emPlantao       Boolean  @default(false)
+  escalaId        String?
+  
+  @@map("distribuicao_leads")
+}
+
+enum StatusDistribuicao {
+  DISTRIBUIDO
+  ACEITO
+  RECUSADO
+  REDISTRIBUIDO
+  TIMEOUT
+}

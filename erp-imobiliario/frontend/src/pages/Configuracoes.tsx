@@ -14,26 +14,9 @@ import {
 
 import { WhatsAppConnection } from '../types/whatsapp';
 
-// Mock de conexões do WhatsApp
-const mockConnections: WhatsAppConnection[] = [
-  {
-    id: '1',
-    userId: 'user1',
-    userName: 'João Silva',
-    phoneNumber: '+5548999991234',
-    status: 'connected',
-    lastConnection: new Date().toISOString(),
-    sessionId: 'session_joao_123'
-  },
-  {
-    id: '2',
-    userId: 'user2',
-    userName: 'Maria Santos',
-    phoneNumber: '+5548999995678',
-    status: 'disconnected',
-    lastConnection: new Date(Date.now() - 86400000).toISOString() // 1 dia atrás
-  }
-];
+// TODO: Replace with API integration to fetch WhatsApp connections
+// Remove mock data and implement proper API calls to backend WhatsApp service
+const mockConnections: WhatsAppConnection[] = [];
 
 const Configuracoes: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'sistema'>('whatsapp');

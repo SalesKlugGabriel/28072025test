@@ -120,6 +120,14 @@ const SideBarModular: React.FC<SidebarProps> = ({ isOpen, onToggle, userRole }) 
           icon: PresentationChartBarIcon,
           roles: ['admin', 'gerente', 'corretor'],
           description: 'Relatórios de vendas e performance'
+        },
+        {
+          name: 'Prospecções',
+          href: '/prospeccoes',
+          icon: TruckIcon,
+          roles: ['admin', 'gerente', 'corretor'],
+          badge: 'NOVO',
+          description: 'Gestão de prospecções ativas'
         }
       ]
     },

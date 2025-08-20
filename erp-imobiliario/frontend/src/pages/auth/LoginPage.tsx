@@ -13,12 +13,6 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Demo users - alinhado com auth-context.tsx
-  const demoUsers = [
-    { email: 'admin@legasys.com', password: '123456', role: 'Administrador' },
-    { email: 'gerente@legasys.com', password: '123456', role: 'Gerente' },
-    { email: 'corretor@legasys.com', password: '123456', role: 'Corretor' }
-  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +25,6 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const fillDemoCredentials = (email: string, password: string) => {
-    setEmail(email);
-    setPassword(password);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 flex">
@@ -47,9 +37,9 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
           
-          <h1 className="text-4xl font-bold mb-6">ERP Imobiliário</h1>
+          <h1 className="text-4xl font-bold mb-6">Legacy.87</h1>
           <p className="text-xl text-blue-100 mb-8">
-            Gerencie seu negócio imobiliário de forma inteligente e eficiente
+            Sistema ERP completo para seu negócio imobiliário
           </p>
           
           <div className="space-y-4 text-left">
@@ -89,33 +79,6 @@ const LoginPage: React.FC = () => {
               <p className="text-gray-600 mt-2">Faça login em sua conta</p>
             </div>
 
-            {/* Demo credentials */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-3">Credenciais de demo:</p>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials('admin@legasys.com', '123456')}
-                  className="px-3 py-2 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                >
-                  Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials('gerente@legasys.com', '123456')}
-                  className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                >
-                  Gerente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials('corretor@legasys.com', '123456')}
-                  className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                >
-                  Corretor
-                </button>
-              </div>
-            </div>
 
             {authError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
@@ -214,7 +177,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="mt-8 text-center text-white lg:text-gray-500">
-            <p className="text-sm">© 2025 ERP Imobiliário. Todos os direitos reservados.</p>
+            <p className="text-sm">© 2025 Legacy.87. Todos os direitos reservados.</p>
           </div>
         </div>
       </div>

@@ -121,6 +121,13 @@ const MapaDisponibilidadeComponent: React.FC<MapaDisponibilidadeProps> = ({
 
   // Obter cor da unidade baseada no status
   const getUnidadeColor = (unidade: UnidadeContrato & DisponibilidadeUnidade) => {
+    // Verifica se é terceiro (mock - pode ser baseado em uma propriedade específica)
+    const isTerceiro = unidade.numero.includes('T') || unidade.observacoes?.includes('terceiro');
+    
+    if (isTerceiro && unidade.status === 'disponivel') {
+      return 'bg-gradient-to-br from-green-100 to-green-200 border-4 border-yellow-400 hover:from-green-200 hover:to-green-300 shadow-md';
+    }
+
     switch (unidade.status) {
       case 'disponivel':
         return 'bg-green-100 border-green-400 hover:bg-green-200';

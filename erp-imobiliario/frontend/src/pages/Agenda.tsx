@@ -59,14 +59,15 @@ const Agenda: React.FC = () => {
   }, []);
 
   const carregarEventos = () => {
-    // Simular carregamento de eventos
+    // Simular carregamento de eventos com mais exemplos
+    const hoje = new Date();
     const eventosSimulados: Evento[] = [
       {
         id: '1',
         titulo: 'Reunião com João Silva',
         descricao: 'Apresentação do empreendimento Jardim das Flores',
-        dataInicio: new Date().toISOString(),
-        dataFim: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 9, 0).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 10, 0).toISOString(),
         tipo: 'reuniao',
         status: 'agendado',
         participantes: ['João Silva', 'Maria Santos'],
@@ -83,8 +84,8 @@ const Agenda: React.FC = () => {
         id: '2',
         titulo: 'Videochamada - Ana Costa',
         descricao: 'Esclarecimento de dúvidas sobre financiamento',
-        dataInicio: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-        dataFim: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 14, 30).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 15, 30).toISOString(),
         tipo: 'videochamada',
         status: 'confirmado',
         participantes: ['Ana Costa'],
@@ -94,6 +95,74 @@ const Agenda: React.FC = () => {
         cor: 'red',
         prioridade: 'media',
         lembrete: 30,
+        criadoPor: 'admin',
+        dataCriacao: new Date().toISOString()
+      },
+      {
+        id: '3',
+        titulo: 'Ligação - Carlos Mendes',
+        descricao: 'Follow-up sobre proposta de apartamento',
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 11, 0).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 11, 30).toISOString(),
+        tipo: 'ligacao',
+        status: 'agendado',
+        participantes: ['Carlos Mendes'],
+        leadId: 'lead_789',
+        clienteNome: 'Carlos Mendes',
+        cor: 'green',
+        prioridade: 'media',
+        lembrete: 10,
+        criadoPor: 'admin',
+        dataCriacao: new Date().toISOString()
+      },
+      {
+        id: '4',
+        titulo: 'Visita ao empreendimento',
+        descricao: 'Visita guiada com família interessada',
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 16, 0).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 17, 30).toISOString(),
+        tipo: 'visita',
+        status: 'confirmado',
+        participantes: ['Família Santos'],
+        local: 'Empreendimento Vista Verde',
+        leadId: 'lead_321',
+        clienteNome: 'Roberto Santos',
+        cor: 'purple',
+        prioridade: 'alta',
+        lembrete: 60,
+        criadoPor: 'admin',
+        dataCriacao: new Date().toISOString()
+      },
+      {
+        id: '5',
+        titulo: 'Apresentação comercial',
+        descricao: 'Apresentação de novos lançamentos',
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 10, 0).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 12, 0).toISOString(),
+        tipo: 'reuniao',
+        status: 'agendado',
+        participantes: ['Equipe Comercial'],
+        local: 'Sala de Reuniões',
+        cor: 'blue',
+        prioridade: 'media',
+        lembrete: 30,
+        criadoPor: 'admin',
+        dataCriacao: new Date().toISOString()
+      },
+      {
+        id: '6',
+        titulo: 'Follow-up importante',
+        descricao: 'Retomar negociação em andamento',
+        dataInicio: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 15, 0).toISOString(),
+        dataFim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 15, 45).toISOString(),
+        tipo: 'follow-up',
+        status: 'agendado',
+        participantes: ['Lucia Fernandes'],
+        leadId: 'lead_654',
+        clienteNome: 'Lucia Fernandes',
+        cor: 'orange',
+        prioridade: 'alta',
+        lembrete: 15,
         criadoPor: 'admin',
         dataCriacao: new Date().toISOString()
       }
@@ -138,6 +207,105 @@ const Agenda: React.FC = () => {
     return tipoObj ? tipoObj.icon : ClockIcon;
   };
 
+  const renderCalendarioDia = () => {
+    const diaAtual = viewMode.date;
+    
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header do dia */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setViewMode({ ...viewMode, date: new Date(diaAtual.getTime() - 24 * 60 * 60 * 1000) })}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              ←
+            </button>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                {diaAtual.toLocaleDateString('pt-BR', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </h2>
+              <p className="text-gray-600 text-sm">
+                {filteredEventos.filter(evento => {
+                  const dataEvento = new Date(evento.dataInicio);
+                  return dataEvento.toDateString() === diaAtual.toDateString();
+                }).length} eventos agendados
+              </p>
+            </div>
+            <button
+              onClick={() => setViewMode({ ...viewMode, date: new Date(diaAtual.getTime() + 24 * 60 * 60 * 1000) })}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              →
+            </button>
+          </div>
+          <button
+            onClick={() => setViewMode({ ...viewMode, date: new Date() })}
+            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Hoje
+          </button>
+        </div>
+
+        {/* Grid de horários do dia */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-1 gap-0">
+            {Array.from({ length: 24 }, (_, hora) => {
+              const eventosNaHora = filteredEventos.filter(evento => {
+                const inicioEvento = new Date(evento.dataInicio);
+                return inicioEvento.getDate() === diaAtual.getDate() &&
+                       inicioEvento.getMonth() === diaAtual.getMonth() &&
+                       inicioEvento.getFullYear() === diaAtual.getFullYear() &&
+                       inicioEvento.getHours() === hora;
+              });
+
+              return (
+                <div key={hora} className="flex border-b border-gray-100">
+                  <div className="w-20 p-3 text-sm text-gray-500 border-r border-gray-200 bg-gray-50">
+                    {hora.toString().padStart(2, '0')}:00
+                  </div>
+                  <div className="flex-1 p-3 min-h-[80px]">
+                    {eventosNaHora.map(evento => {
+                      const IconeEvento = obterIconePorTipo(evento.tipo);
+                      const cor = obterCorPorTipo(evento.tipo);
+                      
+                      return (
+                        <div
+                          key={evento.id}
+                          className={`p-3 mb-2 rounded-lg cursor-pointer bg-${cor}-100 border-l-4 border-${cor}-500 hover:bg-${cor}-200 transition-colors`}
+                          onClick={() => setSelectedEvent(evento)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <IconeEvento className={`h-4 w-4 text-${cor}-600`} />
+                              <span className="font-medium text-gray-900">{evento.titulo}</span>
+                            </div>
+                            <span className="text-sm text-gray-600">
+                              {formatarHora(evento.dataInicio)} - {formatarHora(evento.dataFim)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{evento.descricao}</p>
+                          {evento.clienteNome && (
+                            <p className="text-xs text-gray-500 mt-1">Cliente: {evento.clienteNome}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderCalendarioSemana = () => {
     const inicioSemana = new Date(viewMode.date);
     inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
@@ -150,61 +318,226 @@ const Agenda: React.FC = () => {
     }
 
     return (
-      <div className="grid grid-cols-8 gap-4 h-full">
-        {/* Header dos dias */}
-        <div className="col-span-1"></div>
-        {diasSemana.map((dia, index) => (
-          <div key={index} className="text-center p-2 border-b border-gray-200">
-            <div className="font-medium text-gray-900">
-              {dia.toLocaleDateString('pt-BR', { weekday: 'short' })}
+      <div className="flex flex-col h-full">
+        {/* Header da semana */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                const novaSemana = new Date(inicioSemana);
+                novaSemana.setDate(inicioSemana.getDate() - 7);
+                setViewMode({ ...viewMode, date: novaSemana });
+              }}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              ←
+            </button>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                {inicioSemana.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </h2>
+              <p className="text-gray-600 text-sm">
+                {inicioSemana.getDate()} - {diasSemana[6].getDate()}
+              </p>
             </div>
-            <div className="text-2xl font-bold text-gray-700">
-              {dia.getDate()}
-            </div>
+            <button
+              onClick={() => {
+                const novaSemana = new Date(inicioSemana);
+                novaSemana.setDate(inicioSemana.getDate() + 7);
+                setViewMode({ ...viewMode, date: novaSemana });
+              }}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              →
+            </button>
           </div>
-        ))}
+          <button
+            onClick={() => setViewMode({ ...viewMode, date: new Date() })}
+            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Esta semana
+          </button>
+        </div>
 
-        {/* Grid de horários */}
-        {Array.from({ length: 24 }, (_, hora) => (
-          <React.Fragment key={hora}>
-            <div className="p-2 text-sm text-gray-500 border-r border-gray-200">
-              {hora.toString().padStart(2, '0')}:00
+        <div className="grid grid-cols-8 gap-0 h-full">
+          {/* Header dos dias */}
+          <div className="col-span-1 border-r border-gray-200"></div>
+          {diasSemana.map((dia, index) => (
+            <div key={index} className="text-center p-3 border-b border-r border-gray-200 bg-gray-50">
+              <div className="font-medium text-gray-900">
+                {dia.toLocaleDateString('pt-BR', { weekday: 'short' })}
+              </div>
+              <div className={`text-2xl font-bold mt-1 ${
+                dia.toDateString() === new Date().toDateString() ? 'text-blue-600' : 'text-gray-700'
+              }`}>
+                {dia.getDate()}
+              </div>
             </div>
-            {diasSemana.map((dia, diaIndex) => {
-              const eventosNaHora = filteredEventos.filter(evento => {
-                const inicioEvento = new Date(evento.dataInicio);
-                return inicioEvento.getDate() === dia.getDate() &&
-                       inicioEvento.getMonth() === dia.getMonth() &&
-                       inicioEvento.getHours() === hora;
-              });
+          ))}
 
-              return (
-                <div key={`${hora}-${diaIndex}`} className="p-1 border border-gray-100 min-h-[60px]">
-                  {eventosNaHora.map(evento => {
-                    const IconeEvento = obterIconePorTipo(evento.tipo);
+          {/* Grid de horários */}
+          {Array.from({ length: 24 }, (_, hora) => (
+            <React.Fragment key={hora}>
+              <div className="p-2 text-sm text-gray-500 border-r border-b border-gray-200 bg-gray-50">
+                {hora.toString().padStart(2, '0')}:00
+              </div>
+              {diasSemana.map((dia, diaIndex) => {
+                const eventosNaHora = filteredEventos.filter(evento => {
+                  const inicioEvento = new Date(evento.dataInicio);
+                  return inicioEvento.getDate() === dia.getDate() &&
+                         inicioEvento.getMonth() === dia.getMonth() &&
+                         inicioEvento.getFullYear() === dia.getFullYear() &&
+                         inicioEvento.getHours() === hora;
+                });
+
+                return (
+                  <div key={`${hora}-${diaIndex}`} className="p-1 border-b border-r border-gray-100 min-h-[60px]">
+                    {eventosNaHora.map(evento => {
+                      const IconeEvento = obterIconePorTipo(evento.tipo);
+                      const cor = obterCorPorTipo(evento.tipo);
+                      
+                      return (
+                        <div
+                          key={evento.id}
+                          className={`p-2 mb-1 rounded text-xs cursor-pointer bg-${cor}-100 border-l-4 border-${cor}-500 hover:bg-${cor}-200 transition-colors`}
+                          onClick={() => setSelectedEvent(evento)}
+                        >
+                          <div className="flex items-center gap-1">
+                            <IconeEvento className="h-3 w-3" />
+                            <span className="font-medium truncate">{evento.titulo}</span>
+                          </div>
+                          <div className="text-gray-600">
+                            {formatarHora(evento.dataInicio)} - {formatarHora(evento.dataFim)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCalendarioMes = () => {
+    const mesAtual = viewMode.date;
+    const primeiroDiaMes = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), 1);
+    const ultimoDiaMes = new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 0);
+    
+    const primeiroDiaCalendario = new Date(primeiroDiaMes);
+    primeiroDiaCalendario.setDate(primeiroDiaMes.getDate() - primeiroDiaMes.getDay());
+    
+    const diasCalendario: Date[] = [];
+    for (let i = 0; i < 42; i++) { // 6 semanas * 7 dias
+      const dia = new Date(primeiroDiaCalendario);
+      dia.setDate(primeiroDiaCalendario.getDate() + i);
+      diasCalendario.push(dia);
+    }
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header do mês */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                const mesAnterior = new Date(mesAtual);
+                mesAnterior.setMonth(mesAtual.getMonth() - 1);
+                setViewMode({ ...viewMode, date: mesAnterior });
+              }}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              ←
+            </button>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                {mesAtual.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </h2>
+            </div>
+            <button
+              onClick={() => {
+                const proximoMes = new Date(mesAtual);
+                proximoMes.setMonth(mesAtual.getMonth() + 1);
+                setViewMode({ ...viewMode, date: proximoMes });
+              }}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              →
+            </button>
+          </div>
+          <button
+            onClick={() => setViewMode({ ...viewMode, date: new Date() })}
+            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Este mês
+          </button>
+        </div>
+
+        {/* Header dos dias da semana */}
+        <div className="grid grid-cols-7 border-b border-gray-200">
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((dia, index) => (
+            <div key={index} className="p-3 text-center font-medium text-gray-600 bg-gray-50 border-r border-gray-200">
+              {dia}
+            </div>
+          ))}
+        </div>
+
+        {/* Grid do calendário */}
+        <div className="grid grid-cols-7 flex-1">
+          {diasCalendario.map((dia, index) => {
+            const eventosNoDia = filteredEventos.filter(evento => {
+              const dataEvento = new Date(evento.dataInicio);
+              return dataEvento.toDateString() === dia.toDateString();
+            });
+
+            const isDiaAtual = dia.toDateString() === new Date().toDateString();
+            const isOutroMes = dia.getMonth() !== mesAtual.getMonth();
+
+            return (
+              <div
+                key={index}
+                className={`p-2 border-r border-b border-gray-200 min-h-[120px] ${
+                  isOutroMes ? 'bg-gray-50' : 'bg-white'
+                } hover:bg-gray-50 transition-colors cursor-pointer`}
+                onClick={() => setViewMode({ type: 'dia', date: dia })}
+              >
+                <div className={`text-sm font-medium mb-2 ${
+                  isDiaAtual ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' :
+                  isOutroMes ? 'text-gray-400' : 'text-gray-900'
+                }`}>
+                  {dia.getDate()}
+                </div>
+                
+                <div className="space-y-1">
+                  {eventosNoDia.slice(0, 3).map(evento => {
                     const cor = obterCorPorTipo(evento.tipo);
-                    
                     return (
                       <div
                         key={evento.id}
-                        className={`p-2 mb-1 rounded text-xs cursor-pointer bg-${cor}-100 border-l-4 border-${cor}-500 hover:bg-${cor}-200 transition-colors`}
-                        onClick={() => setSelectedEvent(evento)}
+                        className={`text-xs p-1 rounded bg-${cor}-100 text-${cor}-800 truncate`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedEvent(evento);
+                        }}
                       >
-                        <div className="flex items-center gap-1">
-                          <IconeEvento className="h-3 w-3" />
-                          <span className="font-medium truncate">{evento.titulo}</span>
-                        </div>
-                        <div className="text-gray-600">
-                          {formatarHora(evento.dataInicio)} - {formatarHora(evento.dataFim)}
-                        </div>
+                        {formatarHora(evento.dataInicio)} {evento.titulo}
                       </div>
                     );
                   })}
+                  
+                  {eventosNoDia.length > 3 && (
+                    <div className="text-xs text-gray-500 font-medium">
+                      +{eventosNoDia.length - 3} mais
+                    </div>
+                  )}
                 </div>
-              );
-            })}
-          </React.Fragment>
-        ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -358,7 +691,10 @@ const Agenda: React.FC = () => {
 
         {/* Conteúdo Principal */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 min-h-[600px]">
-          {viewMode.type === 'lista' ? renderListaEventos() : renderCalendarioSemana()}
+          {viewMode.type === 'lista' && renderListaEventos()}
+          {viewMode.type === 'dia' && renderCalendarioDia()}
+          {viewMode.type === 'semana' && renderCalendarioSemana()}
+          {viewMode.type === 'mes' && renderCalendarioMes()}
         </div>
 
         {/* Estatísticas Rápidas */}

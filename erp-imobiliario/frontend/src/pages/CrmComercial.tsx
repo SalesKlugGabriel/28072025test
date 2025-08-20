@@ -147,99 +147,17 @@ type Action =
    Mocks
 ========================================================= */
 
-const mockClientes: Cliente[] = [
-  {
-    id: "1",
-    nome: "Maria Silva Santos",
-    email: "maria.silva@email.com",
-    telefone: "(48) 99999-1234",
-    whatsapp: "48999991234",
-    origem: "site",
-    status: "interessado",
-    prioridade: "alta",
-    valorOrcamento: 450000,
-    responsavel: "João Corretor",
-    dataCriacao: "2025-01-15",
-    ultimoContato: "2025-01-28T14:30:00",
-    proximoFollowUp: "2025-01-31T10:00:00",
-    empreendimentoInteresse: "Residencial Solar das Flores",
-    tags: ["qualificado", "urgente", "financiamento-aprovado"],
-    score: 85,
-    temperatura: "quente",
-    tempoResposta: 2,
-    numeroContatos: 5,
-    cidade: "Florianópolis",
-  },
-  {
-    id: "2",
-    nome: "Carlos Eduardo Lima",
-    email: "carlos.lima@empresa.com",
-    telefone: "(48) 98888-5678",
-    whatsapp: "48988885678",
-    origem: "indicacao",
-    status: "negociacao",
-    prioridade: "alta",
-    valorOrcamento: 680000,
-    responsavel: "Ana Corretora",
-    dataCriacao: "2025-01-10",
-    ultimoContato: "2025-01-29T09:00:00",
-    proximoFollowUp: "2025-02-01T11:00:00",
-    empreendimentoInteresse: "Comercial Business Center",
-    tags: ["investidor", "decisor", "alta-renda"],
-    score: 92,
-    temperatura: "quente",
-    tempoResposta: 1,
-    numeroContatos: 8,
-    cidade: "Florianópolis",
-  },
-  {
-    id: "3",
-    nome: "Pedro Santos Oliveira",
-    email: "pedro.oliveira@gmail.com",
-    telefone: "(48) 97777-9012",
-    origem: "redes-sociais",
-    status: "lead",
-    prioridade: "media",
-    responsavel: "Maria Corretora",
-    dataCriacao: "2025-01-25",
-    ultimoContato: "2025-01-26T08:00:00",
-    proximoFollowUp: "2025-01-30T15:00:00",
-    tags: ["novo", "primeira-conversa"],
-    score: 45,
-    temperatura: "morno",
-    tempoResposta: 12,
-    numeroContatos: 1,
-    cidade: "São José",
-  },
-];
+// TODO: Replace with API integration to fetch clientes
+// Remove mock data and implement proper API calls to backend CRM service
+const mockClientes: Cliente[] = [];
 
-const mockAtividades: Atividade[] = [
-  {
-    id: "a1",
-    clienteId: "1",
-    tipo: "ligacao",
-    descricao: "Follow-up sobre interesse",
-    data: "2025-01-28T14:30:00",
-    responsavel: "João Corretor",
-    status: "concluido",
-    duracaoMinutos: 15,
-  },
-  {
-    id: "a2",
-    clienteId: "1",
-    tipo: "follow-up",
-    descricao: "Agendar visita ao decorado",
-    data: "2025-02-02T10:00:00",
-    responsavel: "João Corretor",
-    status: "agendado",
-  },
-];
+// TODO: Replace with API integration to fetch atividades
+// Remove mock data and implement proper API calls to backend activity service
+const mockAtividades: Atividade[] = [];
 
-const mockMensagens: Mensagem[] = [
-  { id: "m1", clienteId: "1", autor: "lead", canal: "whatsapp", texto: "Olá! Tenho interesse no Solar das Flores.", data: "2025-01-28T14:35:00" },
-  { id: "m2", clienteId: "1", autor: "agente", canal: "whatsapp", texto: "Oi Maria! Posso te passar a planta e valores?", data: "2025-01-28T14:37:00" },
-  { id: "m3", clienteId: "2", autor: "lead", canal: "whatsapp", texto: "Tem vaga no Business Center este mês?", data: "2025-01-29T10:10:00" },
-];
+// TODO: Replace with API integration to fetch mensagens
+// Remove mock data and implement proper API calls to backend messaging service
+const mockMensagens: Mensagem[] = [];
 
 const pipelinesDefaults: CRMState["pipelines"] = {
   "comercial": { id: "comercial", nome: "Comercial (Padrão)", estagios: ["lead", "contato", "interessado", "negociacao", "proposta", "vendido", "perdido"] },
@@ -693,7 +611,8 @@ function Chat() {
               <button
                 className="px-2 py-1 border rounded text-sm"
                 onClick={() => {
-                  dispatch({ type: "OPEN_MODAL", payload: "detalhes" });
+                  // Navegar para página específica do lead
+                  window.location.href = `/pessoas/lead/${sel.id}`;
                 }}
               >
                 Detalhes

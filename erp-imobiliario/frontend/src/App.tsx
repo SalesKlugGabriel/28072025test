@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 
 // Components
-import SideBarModular from './components/SideBarModular';
-import Header from './components/Header';
+import SideBarResponsive from './components/SideBarResponsive';
+import HeaderResponsive from './components/HeaderResponsive';
 import NovoLeadModal from './components/NovoLeadModal';
 import LoginPage from './pages/auth/LoginPage';
 import { AuthProvider, useAuth } from './context/auth-context';
@@ -23,6 +23,9 @@ import ImoveisTerceiros from './pages/ImoveisTerceiros';
 import Ajuda from './pages/Ajuda';
 import Agenda from './pages/Agenda';
 import Financeiro from './pages/Financeiro';
+import LeadPage from './pages/LeadPage';
+import LeadEditPage from './pages/LeadEditPage';
+import Prospeccoes from './pages/Prospeccoes';
 
 // Automações
 import NotificacoesPage from './pages/automacoes/NotificacoesPage';
@@ -86,6 +89,7 @@ function reducer(
 const MainApp: React.FC = () => {
   const { usuario, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Converter usuario do contexto para o formato esperado pelo Header/Sidebar
@@ -115,54 +119,56 @@ const MainApp: React.FC = () => {
 
   return (
     <Router>
-      <div className="flex h-screen bg-gray-50">
-        {/* Sidebar */}
-        <SideBarModular
+      <div className="flex h-screen bg-gray-50 overflow-hidden">
+        {/* Sidebar Responsiva */}
+        <SideBarResponsive
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           userRole={legacyUser?.role || 'admin'}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
         />
 
         {/* Main Content */}
-        <div
-          className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
-            sidebarOpen ? 'ml-72' : 'ml-16'
-          }`}
-        >
-          {/* Header */}
-          <Header
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header Responsivo */}
+          <HeaderResponsive
             user={legacyUser}
             onLogout={logout}
-            onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+            onMobileMenuToggle={() => setMobileMenuOpen(!isMobileMenuOpen)}
+            isMobileMenuOpen={isMobileMenuOpen}
           />
 
           {/* Page Content */}
-          <main className="flex-1 overflow-hidden bg-gray-50">
+          <main className="flex-1 overflow-y-auto bg-gray-50 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
             <Routes>
               <Route path="/" element={<Navigate to="/home" replace />} />
-              <Route path="/home" element={<div className="h-full p-6"><DashboardMelhorado /></div>} />
+              <Route path="/home" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><DashboardMelhorado /></div>} />
               
               {/* Comercial */}
               <Route path="/crm/*" element={<CrmComercial />} />
               <Route path="/whatsapp/*" element={<WhatsAppPage userRole={legacyUser?.role} />} />
               <Route path="/relatorios" element={<Relatorios />} />
+              <Route path="/prospeccoes" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><Prospeccoes /></div>} />
               
               {/* Cadastros */}
-              <Route path="/pessoas/*" element={<div className="h-full p-6"><Pessoas /></div>} />
-              <Route path="/empreendimentos/*" element={<div className="h-full p-6"><Empreendimentos /></div>} />
-              <Route path="/imoveis-terceiros/*" element={<div className="h-full p-6"><ImoveisTerceiros /></div>} />
+              <Route path="/pessoas/*" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><Pessoas /></div>} />
+              <Route path="/pessoas/lead/:id" element={<LeadPage />} />
+              <Route path="/pessoas/lead/:id/editar" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><LeadEditPage /></div>} />
+              <Route path="/empreendimentos/*" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><Empreendimentos /></div>} />
+              <Route path="/imoveis-terceiros/*" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><ImoveisTerceiros /></div>} />
               
               {/* Jurídico */}
-              <Route path="/juridico/*" element={<div className="h-full p-6"><Juridico /></div>} />
+              <Route path="/juridico/*" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><Juridico /></div>} />
               
               {/* Financeiro */}
-              <Route path="/financeiro/*" element={<div className="h-full"><Financeiro /></div>} />
+              <Route path="/financeiro/*" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><Financeiro /></div>} />
               
               {/* Automações */}
-              <Route path="/automacoes/notificacoes" element={<div className="h-full p-6"><NotificacoesPage /></div>} />
-              <Route path="/automacoes/distribuicao" element={<div className="h-full p-6"><DistribuicaoPage /></div>} />
-              <Route path="/automacoes/acoes-massa" element={<div className="h-full p-6"><AcoesMassaPage /></div>} />
-              <Route path="/automacoes/integracoes" element={<div className="h-full p-6"><PlaceholderPage title="Integrações" /></div>} />
+              <Route path="/automacoes/notificacoes" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><NotificacoesPage /></div>} />
+              <Route path="/automacoes/distribuicao" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><DistribuicaoPage /></div>} />
+              <Route path="/automacoes/acoes-massa" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><AcoesMassaPage /></div>} />
+              <Route path="/automacoes/integracoes" element={<div className="p-4 sm:p-6 max-w-full overflow-x-hidden"><PlaceholderPage title="Integrações" /></div>} />
               
               {/* Configurações */}
               <Route path="/configuracoes/*" element={<div className="h-full p-6"><Configuracoes /></div>} />

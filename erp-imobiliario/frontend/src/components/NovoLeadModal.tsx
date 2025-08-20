@@ -1,6 +1,7 @@
 import React, { useState, FormEvent, useEffect } from 'react';
 import { X, User, Mail, Phone, Target, Save } from 'lucide-react';
 import FormularioCompletoLead from './FormularioCompletoLead';
+import { useAuth } from '../context/auth-context';
 
 interface Cliente {
   id: string;
@@ -8,6 +9,9 @@ interface Cliente {
   email: string;
   telefone: string;
   origem: string;
+  responsavelCRM: string;
+  responsavel: string;
+  dataCreated: string;
 }
 
 interface Props {
@@ -19,6 +23,8 @@ interface Props {
 }
 
 const NovoLeadModal: React.FC<Props> = ({ aberto, dispatch }) => {
+  const { usuario } = useAuth();
+  
   // Estado para controlar qual formulário usar
   const [tipoFormulario, setTipoFormulario] = useState<'basico' | 'completo'>('basico');
   
@@ -45,6 +51,20 @@ const NovoLeadModal: React.FC<Props> = ({ aberto, dispatch }) => {
     'Evento/Feira',
     'Outros'
   ];
+
+  // Função para verificar duplicatas
+  const verificarDuplicata = async (nome: string, telefone: string, email: string) => {
+    // Mock de verificação - em produção seria uma consulta ao backend
+    const leadsExistentes = JSON.parse(localStorage.getItem('legasys_leads') || '[]');
+    
+    const duplicata = leadsExistentes.find((lead: any) => 
+      (lead.nome.toLowerCase() === nome.toLowerCase() && 
+       (lead.telefone === telefone || lead.email.toLowerCase() === email.toLowerCase())) &&
+      lead.status !== 'inativo' // Não considerar leads inativos/excluídos
+    );
+    
+    return duplicata || null;
+  };
 
   // Limpar formulário quando modal fechar
   useEffect(() => {
@@ -114,12 +134,24 @@ const NovoLeadModal: React.FC<Props> = ({ aberto, dispatch }) => {
       // Simular delay de API
       await new Promise(resolve => setTimeout(resolve, 800));
 
+      // Verificar duplicatas antes de criar
+      const leadExistente = await verificarDuplicata(nome.trim(), telefone.trim(), email.trim());
+      
+      if (leadExistente) {
+        setErros({ geral: `Já existe um lead cadastrado com estes dados. Responsável: ${leadExistente.responsavel}` });
+        setEnviando(false);
+        return;
+      }
+
       const novoCliente: Cliente = {
         id: `lead_${Date.now()}`,
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
         telefone: telefone.trim(),
         origem: origem.trim(),
+        responsavelCRM: usuario?.id || 'unknown',
+        responsavel: usuario?.nome || 'Usuário Desconhecido',
+        dataCreated: new Date().toISOString()
       };
 
       dispatch({ type: 'ADD_CLIENTE', payload: novoCliente });
@@ -137,14 +169,29 @@ const NovoLeadModal: React.FC<Props> = ({ aberto, dispatch }) => {
   };
 
   // Submit do formulário completo
-  const handleSubmitCompleto = (dadosCompletos: any) => {
+  const handleSubmitCompleto = async (dadosCompletos: any) => {
     try {
+      // Verificar duplicatas antes de criar
+      const leadExistente = await verificarDuplicata(
+        dadosCompletos.nome, 
+        dadosCompletos.telefone, 
+        dadosCompletos.email
+      );
+      
+      if (leadExistente) {
+        console.error('Lead duplicado encontrado:', leadExistente);
+        return;
+      }
+
       const novoCliente: Cliente = {
         id: `lead_${Date.now()}`,
         nome: dadosCompletos.nome,
         email: dadosCompletos.email,
         telefone: dadosCompletos.telefone,
         origem: dadosCompletos.origem || 'Cadastro Completo',
+        responsavelCRM: usuario?.id || 'unknown',
+        responsavel: usuario?.nome || 'Usuário Desconhecido',
+        dataCreated: new Date().toISOString()
       };
 
       dispatch({ type: 'ADD_CLIENTE', payload: novoCliente });

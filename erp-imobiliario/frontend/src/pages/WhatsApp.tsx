@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { WhatsAppAuth } from '../components/whatsapp/WhatsAppAuth';
 import { WhatsAppChat } from '../components/whatsapp/WhatsAppChat';
 import { WhatsAppUserConfig } from '../components/WhatsAppUserConfig';
+import WhatsAppHelpManual from '../components/whatsapp/WhatsAppHelpManual';
 import { whatsappService } from '../services/whatsappService';
 import multiUserWhatsAppService from '../services/multiUserWhatsappService';
 import { WhatsAppConnection } from '../types/whatsapp';
 import { useAuth } from '../context/auth-context';
-import { CogIcon } from '@heroicons/react/24/outline';
+import { CogIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 
 interface WhatsAppPageProps {
   userRole?: string;
@@ -17,6 +18,7 @@ const WhatsAppPage: React.FC<WhatsAppPageProps> = ({ userRole = 'corretor' }) =>
   const [connection, setConnection] = useState<WhatsAppConnection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     if (usuario) {
@@ -77,8 +79,15 @@ const WhatsAppPage: React.FC<WhatsAppPageProps> = ({ userRole = 'corretor' }) =>
 
   return (
     <div className="min-h-screen bg-gray-50 relative">
-      {/* Botão de Configuração */}
-      <div className="absolute top-4 right-4 z-10">
+      {/* Botões de Configuração e Ajuda */}
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-3 bg-white border border-gray-300 rounded-full shadow-lg hover:shadow-xl transition-all hover:bg-gray-50"
+          title="Manual de Ajuda"
+        >
+          <QuestionMarkCircleIcon className="w-5 h-5 text-green-600" />
+        </button>
         <button
           onClick={() => setShowConfig(true)}
           className="p-3 bg-white border border-gray-300 rounded-full shadow-lg hover:shadow-xl transition-all hover:bg-gray-50"
@@ -97,6 +106,12 @@ const WhatsAppPage: React.FC<WhatsAppPageProps> = ({ userRole = 'corretor' }) =>
           />
         </div>
       )}
+
+      {/* Modal de Ajuda */}
+      <WhatsAppHelpManual
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+      />
 
       {/* Conteúdo Principal */}
       {!connection || connection.status !== 'connected' ? (

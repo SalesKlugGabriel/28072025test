@@ -87,10 +87,39 @@ interface DocumentoColaborador {
   observacoes?: string;
 }
 
+interface UnidadeAdquirida {
+  id: string;
+  empreendimento: string;
+  unidade: string;
+  valorContrato: number;
+  valorInicial: number;
+  valorParcela: number;
+  valorCorrigido: number;
+  valorEmpreendimentoHoje: number;
+  dataContrato: string;
+  cubInicialMes: number;
+  cubInicialAno: number;
+  status: 'ativo' | 'quitado' | 'cancelado';
+  proximoVencimento?: string;
+}
+
+interface HistoricoInvestimento {
+  totalInvestido: number;
+  unidades: UnidadeAdquirida[];
+}
+
 function PerfilPessoaMelhorado() {
   const { state, dispatch } = usePessoas();
   const pessoa = state.pessoaSelecionada;
   const [abaAtiva, setAbaAtiva] = useState('informacoes');
+  
+  // Estados para modais
+  const [showModalFalta, setShowModalFalta] = useState(false);
+  const [showModalAtestado, setShowModalAtestado] = useState(false);
+  const [showModalBancoHoras, setShowModalBancoHoras] = useState(false);
+  const [showModalAdvertencia, setShowModalAdvertencia] = useState(false);
+  const [showModalContrato, setShowModalContrato] = useState(false);
+  const [showModalDocumento, setShowModalDocumento] = useState(false);
   
   if (!pessoa) return null;
   
@@ -113,9 +142,14 @@ function PerfilPessoaMelhorado() {
 
   const ehColaborador = pessoa.tipo === 'colaborador_pf' || pessoa.tipo === 'colaborador_pj';
 
+  const ehCliente = pessoa.tipo === 'cliente' || pessoa.tipo === 'lead';
+
   const abas = [
     { id: 'informacoes', nome: 'Informações', icon: UserIcon },
     { id: 'dados-bancarios', nome: 'Dados Bancários', icon: CreditCardIcon },
+    ...(ehCliente ? [
+      { id: 'investimentos', nome: 'Investimentos', icon: BuildingOfficeIcon }
+    ] : []),
     ...(ehColaborador ? [
       { id: 'faltas', nome: 'Faltas', icon: ExclamationCircleIcon },
       { id: 'atestados', nome: 'Atestados', icon: DocumentTextIcon },
@@ -133,6 +167,51 @@ function PerfilPessoaMelhorado() {
     conta: '12345-6',
     tipoConta: 'corrente',
     pix: pessoa.email
+  };
+
+  // Dados mockados de investimentos
+  const historicoInvestimento: HistoricoInvestimento = {
+    totalInvestido: 850000,
+    unidades: [
+      {
+        id: '1',
+        empreendimento: 'Residencial Solar das Flores',
+        unidade: 'Apto 801 - Torre A',
+        valorContrato: 450000,
+        valorInicial: 450000,
+        valorParcela: 1250,
+        valorCorrigido: 520000,
+        valorEmpreendimentoHoje: 580000,
+        dataContrato: '2023-03-15',
+        cubInicialMes: 3,
+        cubInicialAno: 2023,
+        status: 'ativo',
+        proximoVencimento: '2025-02-15'
+      },
+      {
+        id: '2',
+        empreendimento: 'Condomínio Vista Verde',
+        unidade: 'Casa 12 - Quadra B',
+        valorContrato: 400000,
+        valorInicial: 400000,
+        valorParcela: 0,
+        valorCorrigido: 460000,
+        valorEmpreendimentoHoje: 520000,
+        dataContrato: '2022-08-10',
+        cubInicialMes: 8,
+        cubInicialAno: 2022,
+        status: 'quitado',
+        proximoVencimento: undefined
+      }
+    ]
+  };
+
+  const calcularValorCorrigido = (valorInicial: number, cubInicialMes: number, cubInicialAno: number) => {
+    // Cálculo simplificado da correção CUBSC
+    const cubInicial = 1854.23; // CUB de exemplo para março/2023
+    const cubAtual = 2142.56; // CUB atual de exemplo
+    const fatorCorrecao = cubAtual / cubInicial;
+    return valorInicial * fatorCorrecao;
   };
 
   const faltas: FaltaColaborador[] = [
@@ -365,10 +444,9 @@ function PerfilPessoaMelhorado() {
             <div>
               <label className="block text-sm font-medium text-gray-700">Classificação</label>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                (pessoa as Cliente).classificacao === 'vip' ? 'bg-yellow-100 text-yellow-800' :
-                (pessoa as Cliente).classificacao === 'premium' ? 'bg-purple-100 text-purple-800' :
-                (pessoa as Cliente).classificacao === 'gold' ? 'bg-yellow-100 text-yellow-800' :
-                (pessoa as Cliente).classificacao === 'silver' ? 'bg-gray-100 text-gray-800' :
+                (pessoa as Cliente).classificacao === 'diamante' ? 'bg-purple-100 text-purple-800' :
+                (pessoa as Cliente).classificacao === 'ouro' ? 'bg-yellow-100 text-yellow-800' :
+                (pessoa as Cliente).classificacao === 'prata' ? 'bg-gray-100 text-gray-800' :
                 'bg-orange-100 text-orange-800'
               }`}>
                 {(pessoa as Cliente).classificacao}
@@ -453,12 +531,156 @@ function PerfilPessoaMelhorado() {
     </div>
   );
 
+  const renderAbaInvestimentos = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-medium text-gray-900">Histórico de Investimentos</h3>
+        <div className="text-sm text-gray-500">
+          Total investido: <span className="font-bold text-gray-900">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(historicoInvestimento.totalInvestido)}
+          </span>
+        </div>
+      </div>
+
+      {/* Resumo Geral */}
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
+        <h4 className="text-lg font-semibold text-blue-900 mb-4">Resumo dos Investimentos</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-800">
+              {historicoInvestimento.unidades.length}
+            </div>
+            <div className="text-sm text-blue-600">Unidades Adquiridas</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-800">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                historicoInvestimento.unidades.reduce((total, unidade) => total + unidade.valorCorrigido, 0)
+              )}
+            </div>
+            <div className="text-sm text-blue-600">Valor Corrigido Total</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-800">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                historicoInvestimento.unidades.reduce((total, unidade) => total + unidade.valorEmpreendimentoHoje, 0)
+              )}
+            </div>
+            <div className="text-sm text-blue-600">Valor de Mercado Atual</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de Unidades */}
+      <div className="space-y-4">
+        <h4 className="text-lg font-medium text-gray-900">Unidades Adquiridas</h4>
+        {historicoInvestimento.unidades.map((unidade) => (
+          <div key={unidade.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h5 className="text-lg font-semibold text-gray-900">{unidade.unidade}</h5>
+                <p className="text-gray-600">{unidade.empreendimento}</p>
+                <div className="flex items-center mt-2">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    unidade.status === 'ativo' ? 'bg-green-100 text-green-800' :
+                    unidade.status === 'quitado' ? 'bg-blue-100 text-blue-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {unidade.status === 'ativo' ? 'Ativo' :
+                     unidade.status === 'quitado' ? 'Quitado' : 'Cancelado'}
+                  </span>
+                  <span className="ml-3 text-sm text-gray-500">
+                    Contrato: {new Date(unidade.dataContrato).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              </div>
+              <BuildingOfficeIcon className="h-8 w-8 text-gray-400" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-xs text-gray-500 mb-1">Valor do Contrato</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(unidade.valorContrato)}
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 p-3 rounded-lg">
+                <div className="text-xs text-yellow-700 mb-1">Valor Corrigido (CUBSC)</div>
+                <div className="text-lg font-semibold text-yellow-800">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(unidade.valorCorrigido)}
+                </div>
+                <div className="text-xs text-yellow-600">
+                  CUB Base: {unidade.cubInicialMes}/{unidade.cubInicialAno}
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-3 rounded-lg">
+                <div className="text-xs text-green-700 mb-1">Valor de Mercado Hoje</div>
+                <div className="text-lg font-semibold text-green-800">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(unidade.valorEmpreendimentoHoje)}
+                </div>
+                <div className="text-xs text-green-600">Tabela atual</div>
+              </div>
+
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-xs text-blue-700 mb-1">
+                  {unidade.status === 'ativo' ? 'Parcela Mensal' : 'Status'}
+                </div>
+                <div className="text-lg font-semibold text-blue-800">
+                  {unidade.status === 'ativo' 
+                    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(unidade.valorParcela)
+                    : 'Quitado'
+                  }
+                </div>
+                {unidade.proximoVencimento && (
+                  <div className="text-xs text-blue-600">
+                    Próximo: {new Date(unidade.proximoVencimento).toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Indicadores de Performance */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Valorização:</span>
+                <div className="flex items-center">
+                  <span className={`font-medium ${
+                    unidade.valorEmpreendimentoHoje > unidade.valorCorrigido ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {((unidade.valorEmpreendimentoHoje - unidade.valorCorrigido) / unidade.valorCorrigido * 100).toFixed(1)}%
+                  </span>
+                  <span className="ml-2 text-gray-500">
+                    ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                      unidade.valorEmpreendimentoHoje - unidade.valorCorrigido
+                    )})
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {historicoInvestimento.unidades.length === 0 && (
+        <div className="text-center py-8">
+          <BuildingOfficeIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500">Nenhum investimento registrado</p>
+        </div>
+      )}
+    </div>
+  );
+
   const renderAbaFaltas = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Registro de Faltas</h3>
-        <button className="btn btn-primary btn-sm">
-          <DocumentIcon className="w-4 h-4 mr-2" />
+        <button 
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          onClick={() => setShowModalFalta(true)}
+        >
+          <DocumentIcon className="w-4 h-4" />
           Nova Falta
         </button>
       </div>
@@ -510,8 +732,11 @@ function PerfilPessoaMelhorado() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Atestados Médicos</h3>
-        <button className="btn btn-primary btn-sm">
-          <CloudArrowUpIcon className="w-4 h-4 mr-2" />
+        <button 
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+          onClick={() => setShowModalAtestado(true)}
+        >
+          <CloudArrowUpIcon className="w-4 h-4" />
           Novo Atestado
         </button>
       </div>
@@ -560,8 +785,11 @@ function PerfilPessoaMelhorado() {
               {bancoHoras.length > 0 ? `${bancoHoras[bancoHoras.length - 1].saldo}h` : '0h'}
             </p>
           </div>
-          <button className="btn btn-primary btn-sm">
-            <ClockIcon className="w-4 h-4 mr-2" />
+          <button 
+            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+            onClick={() => setShowModalBancoHoras(true)}
+          >
+            <ClockIcon className="w-4 h-4" />
             Novo Lançamento
           </button>
         </div>
@@ -603,8 +831,11 @@ function PerfilPessoaMelhorado() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Advertências</h3>
-        <button className="btn btn-primary btn-sm">
-          <ExclamationTriangleIcon className="w-4 h-4 mr-2" />
+        <button 
+          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+          onClick={() => setShowModalAdvertencia(true)}
+        >
+          <ExclamationTriangleIcon className="w-4 h-4" />
           Nova Advertência
         </button>
       </div>
@@ -646,8 +877,11 @@ function PerfilPessoaMelhorado() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Contratos</h3>
-        <button className="btn btn-primary btn-sm">
-          <DocumentDuplicateIcon className="w-4 h-4 mr-2" />
+        <button 
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+          onClick={() => setShowModalContrato(true)}
+        >
+          <DocumentDuplicateIcon className="w-4 h-4" />
           Novo Contrato
         </button>
       </div>
@@ -692,8 +926,11 @@ function PerfilPessoaMelhorado() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Documentos</h3>
-        <button className="btn btn-primary btn-sm">
-          <CloudArrowUpIcon className="w-4 h-4 mr-2" />
+        <button 
+          className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm"
+          onClick={() => setShowModalDocumento(true)}
+        >
+          <CloudArrowUpIcon className="w-4 h-4" />
           Upload Documento
         </button>
       </div>
@@ -745,6 +982,7 @@ function PerfilPessoaMelhorado() {
     switch (abaAtiva) {
       case 'informacoes': return renderAbaInformacoes();
       case 'dados-bancarios': return renderAbaDadosBancarios();
+      case 'investimentos': return renderAbaInvestimentos();
       case 'faltas': return renderAbaFaltas();
       case 'atestados': return renderAbaAtestados();
       case 'banco-horas': return renderAbaBancoHoras();
@@ -829,6 +1067,289 @@ function PerfilPessoaMelhorado() {
           {renderConteudoAba()}
         </div>
       </div>
+      
+      {/* Modais */}
+      {showModalFalta && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Nova Falta</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
+                <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                  <option value="falta">Falta</option>
+                  <option value="atraso">Atraso</option>
+                  <option value="saida_antecipada">Saída Antecipada</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Justificada</label>
+                <input type="checkbox" className="rounded border-gray-300" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Motivo</label>
+                <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" rows={3}></textarea>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalFalta(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalFalta(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModalAtestado && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Novo Atestado</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Início</label>
+                <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Fim</label>
+                <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
+                  <option value="medico">Médico</option>
+                  <option value="odontologico">Odontológico</option>
+                  <option value="psicologico">Psicológico</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload do Atestado</label>
+                <input type="file" className="w-full border border-gray-300 rounded-lg px-3 py-2" accept=".pdf,.jpg,.png" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalAtestado(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalAtestado(false)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModalBancoHoras && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Novo Lançamento - Banco de Horas</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
+                <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500">
+                  <option value="credito">Crédito (+)</option>
+                  <option value="debito">Débito (-)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Horas</label>
+                <input type="number" step="0.5" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500" placeholder="Ex: 2.5" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Motivo</label>
+                <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500" rows={3} placeholder="Descreva o motivo do lançamento"></textarea>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalBancoHoras(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalBancoHoras(false)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModalAdvertencia && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Nova Advertência</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
+                <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500">
+                  <option value="verbal">Verbal</option>
+                  <option value="escrita">Escrita</option>
+                  <option value="suspensao">Suspensão</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Motivo</label>
+                <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500" placeholder="Ex: Atraso recorrente" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descrição Detalhada</label>
+                <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500" rows={4} placeholder="Descreva os detalhes da advertência"></textarea>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalAdvertencia(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalAdvertencia(false)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModalContrato && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Novo Contrato</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Contrato</label>
+                <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" placeholder="Ex: CLT, Freelancer, Prestação de Serviços" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Data Início</label>
+                  <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Data Fim (opcional)</label>
+                  <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Salário (opcional)</label>
+                <input type="number" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload do Contrato</label>
+                <input type="file" className="w-full border border-gray-300 rounded-lg px-3 py-2" accept=".pdf,.doc,.docx" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalContrato(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalContrato(false)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModalDocumento && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Upload de Documento</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
+                <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                  <option value="CTPS">CTPS</option>
+                  <option value="CPF">CPF</option>
+                  <option value="RG">RG</option>
+                  <option value="CRECI">CRECI</option>
+                  <option value="Reservista">Reservista</option>
+                  <option value="Residência">Comprovante de Residência</option>
+                  <option value="Casamento">Certidão de Casamento</option>
+                  <option value="Nascimento">Certidão de Nascimento</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Documento</label>
+                <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500" placeholder="Ex: RG - João Silva" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Arquivo</label>
+                <input type="file" className="w-full border border-gray-300 rounded-lg px-3 py-2" accept=".pdf,.jpg,.png,.doc,.docx" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500" rows={3} placeholder="Observações adicionais (opcional)"></textarea>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowModalDocumento(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowModalDocumento(false)}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              >
+                Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,109 +7,9 @@ import {
 import { ImovelTerceiros, FiltrosImovelTerceiros } from '../types/imovelTerceiros';
 import CadastroImovelTerceiros from '../components/CadastroImovelTerceiros';
 
-// Mock data para demonstração
-const mockImoveisTerceiros: ImovelTerceiros[] = [
-  {
-    id: '1',
-    nomeEmpreendimento: 'Residencial Bella Vista',
-    numeroUnidade: 'Torre A - 1502',
-    metragem: 85,
-    caracteristicas: {
-      mobilia: 'parcialmente_mobiliado',
-      churrasqueira: true,
-      garagem: true,
-      quantidadeQuartos: 3,
-      quantidadeSuites: 1,
-      lavabo: true,
-      outrasCaracteristicas: ['Varanda', 'Ar Condicionado', 'Closet']
-    },
-    infraEmpreendimento: ['Piscina', 'Academia', 'Salão de Festas', 'Portaria 24h'],
-    localizacao: {
-      endereco: 'Rua das Palmeiras, 123, Centro, Florianópolis - SC',
-      latitude: -27.5954,
-      longitude: -48.5480,
-      distanciaMarKm: 2.5
-    },
-    valor: 650000,
-    detalhesNegociacao: {
-      aceitaCarro: true,
-      aceitaImovel: false,
-      observacoes: 'Proprietário flexível no preço, aceita parcelamento'
-    },
-    fotos: [],
-    descritivo: 'Apartamento com vista parcial para o mar, excelente localização.',
-    proprietario: {
-      id: '1',
-      nome: 'João Silva Santos',
-      telefone: '(48) 99999-1234',
-      email: 'joao@email.com',
-      visivel: false
-    },
-    corretor: {
-      id: 'current_user',
-      nome: 'Maria Corretora'
-    },
-    dataCadastro: '2025-01-20',
-    status: 'disponivel',
-    tags: ['vista-mar', 'alto-padrao'],
-    visualizacoes: 15,
-    interessados: [
-      {
-        id: '1',
-        nome: 'Carlos Oliveira',
-        telefone: '(48) 88888-5678',
-        dataInteresse: '2025-01-25',
-        observacoes: 'Interessado em visita'
-      }
-    ]
-  },
-  {
-    id: '2',
-    nomeEmpreendimento: 'Condomínio Solar',
-    numeroUnidade: '205',
-    metragem: 72,
-    caracteristicas: {
-      mobilia: 'sem_mobilia',
-      churrasqueira: false,
-      garagem: true,
-      quantidadeQuartos: 2,
-      quantidadeSuites: 1,
-      lavabo: false,
-      outrasCaracteristicas: ['Sacada']
-    },
-    infraEmpreendimento: ['Piscina', 'Playground'],
-    localizacao: {
-      endereco: 'Av. Beira Mar, 456, Kobrasol, São José - SC',
-      latitude: -27.6108,
-      longitude: -48.6326,
-      distanciaMarKm: 0.8
-    },
-    valor: 480000,
-    detalhesNegociacao: {
-      aceitaCarro: false,
-      aceitaImovel: true,
-      observacoes: 'Aceita permuta por casa menor'
-    },
-    fotos: [],
-    descritivo: 'Apartamento novo, nunca habitado, próximo à praia.',
-    proprietario: {
-      id: '2',
-      nome: 'Ana Costa',
-      telefone: '(48) 77777-9999',
-      email: 'ana@email.com',
-      visivel: true
-    },
-    corretor: {
-      id: 'other_user',
-      nome: 'Pedro Corretor'
-    },
-    dataCadastro: '2025-01-18',
-    status: 'disponivel',
-    tags: ['novo', 'praia'],
-    visualizacoes: 8,
-    interessados: []
-  }
-];
+// TODO: Replace with API integration to fetch imoveis de terceiros
+// Remove mock data and implement proper API calls to backend service
+const mockImoveisTerceiros: ImovelTerceiros[] = [];
 
 const ImoveisTerceiros: React.FC = () => {
   const [imoveis, setImoveis] = useState<ImovelTerceiros[]>(mockImoveisTerceiros);
@@ -502,6 +402,12 @@ const ImoveisTerceiros: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => alert('Funcionalidade de acessar imóvel em desenvolvimento')}
+                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                      >
+                        Acessar
+                      </button>
                       <button className="p-1 hover:bg-gray-100 rounded">
                         <Heart className="w-4 h-4 text-gray-400" />
                       </button>
@@ -626,6 +532,12 @@ const ImoveisTerceiros: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => alert('Funcionalidade de acessar imóvel em desenvolvimento')}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                          >
+                            Acessar
+                          </button>
                           {imovel.corretor.id === 'current_user' && (
                             <>
                               <button
